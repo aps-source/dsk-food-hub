@@ -330,6 +330,9 @@
   .owner-tab-btn[aria-pressed="true"]{ background:var(--ink); border-color:var(--ink); color:var(--paper); }
   .owner-tab-btn:hover:not([aria-pressed="true"]){ border-color:var(--teal); color:var(--ink); }
   .orders-page-head{ margin:18px 0 4px; }
+  .prep-summary{ margin-bottom:18px; }
+  .prep-chip{ display:inline-flex; align-items:center; gap:6px; background:var(--gold-soft); color:var(--gold-ink); border-radius:10px; padding:8px 14px; font-weight:700; font-size:13.5px; }
+  .prep-chip b{ font-family:'IBM Plex Mono'; font-size:15px; }
 
   /* ============ Owner: order queue ============ */
   .queue-row{
@@ -1029,6 +1032,16 @@
   }
 
   // Orders tab: nothing but the orders themselves — open ones active and on top, closed ones inactive underneath.
+  // Total quantity of each item still needed across orders not yet prepared (PENDING/ACCEPTED/PREPARING).
+  function prepSummaryToday(){
+    var counts = {};
+    todaysOrders().forEach(function(o){
+      if(ACTIVE_STATUSES.indexOf(o.status) === -1) return;
+      o.items.forEach(function(l){ counts[l.name] = (counts[l.name]||0) + l.qty; });
+    });
+    return Object.keys(counts).map(function(k){ return { name:k, qty:counts[k] }; }).sort(function(a,b){ return b.qty - a.qty; });
+  }
+
   function renderOwnerOrders(){
     var today = todaysOrders();
     var isOpenOrder = function(o){ return o.status !== "COMPLETED" && o.status !== "REJECTED" && o.status !== "CANCELLED"; };
@@ -1044,6 +1057,16 @@
       html += '<div class="empty-state" style="margin-top:30px"><div class="big">🧺</div>No orders yet today.</div>';
       return html;
     }
+
+    var prep = prepSummaryToday();
+    if(prep.length){
+      html += '<div class="card accent-owner prep-summary">';
+      html += '<h2 style="font-size:15px">🍳 Prep summary</h2><p class="sub">Total still to prepare, across all open orders</p>';
+      html += '<div class="chip-row">';
+      prep.forEach(function(row){ html += '<span class="prep-chip">' + esc(row.name) + ' <b>× ' + row.qty + '</b></span>'; });
+      html += '</div></div>';
+    }
+
     if(openOrders.length === 0){
       html += '<div class="hint" style="margin:4px 0 16px">Nothing waiting on you right now.</div>';
     }
