@@ -422,6 +422,8 @@
   .hub-tile .local{ margin:0; color:var(--ink-soft); font-size:12px; }
   .hub-tile-meta{ font-size:12.5px; color:var(--ink-soft); }
   .hub-tile-hours{ font-size:12px; color:var(--teal); font-weight:600; }
+  .hub-tile-address{ font-size:11.5px; color:var(--ink-soft); line-height:1.4; }
+  .hub-tile-address-local{ font-size:10.5px; color:var(--ink-soft); opacity:.85; line-height:1.4; margin-top:-4px; }
   .hub-tile-special{ font-size:12px; color:var(--gold-ink); font-weight:700; }
   .hub-tile-cta{ margin-top:auto; padding-top:8px; font-weight:800; font-size:12.5px; color:var(--gold-ink); }
   .hub-tile-ghost{
@@ -483,6 +485,8 @@
     shop: {
       name: "Shri Swami Samartha Bhakri Kendra",
       local: "श्री स्वामी समर्थ भाकरी केंद्र",
+      address: "Survey No. 126, Shop No. H-17, Bhaskara, D.S.K. Vishwa, Pune - 411041",
+      addressLocal: "पत्ता - सर्व्हे नं. १२६, शॉप नं. एच-१७, भास्करा डि.एस.के. विश्व, पुणे-४११०४१",
       tokenPrefix: "SSB",
       isOpenManual: true,
       closureReason: "",
@@ -849,6 +853,8 @@
       '<div>' + badgeForStatus(cs) + '</div>' +
       '<h3>' + esc(state.shop.name) + '</h3>' +
       '<p class="local">' + esc(state.shop.local) + '</p>' +
+      (state.shop.address ? ('<div class="hub-tile-address">📍 ' + esc(state.shop.address) + '</div>') : '') +
+      (state.shop.addressLocal ? ('<div class="hub-tile-address-local">' + esc(state.shop.addressLocal) + '</div>') : '') +
       (timingsBits.length ? ('<div class="hub-tile-hours">' + timingsBits.join(" · ") + '</div>') : '') +
       '<div class="hub-tile-meta">' + metaBits.join(" · ") + '</div>' +
       (special ? ('<div class="hub-tile-special">★ Today: ' + esc(special.name) + ' ' + money(special.price) + '</div>') : '') +
@@ -1231,6 +1237,9 @@
     html += '<h2>Contact</h2>';
     html += '<p class="sub">Customers tap a button to send new-order details straight to this number on WhatsApp. You message customers back the same way from each order in the queue — nothing sends automatically.</p>';
     html += '<div class="field"><label>Shop WhatsApp number</label><input type="tel" id="in-owner-whatsapp" value="' + esc(state.shop.ownerWhatsapp) + '" placeholder="10-digit mobile number"></div>';
+    html += '<div class="field"><label>Address</label><textarea id="in-shop-address" placeholder="Shop no., building, area, city - PIN code">' + esc(state.shop.address) + '</textarea></div>';
+    html += '<div class="field"><label>Address (local script, optional)</label><textarea id="in-shop-address-local" placeholder="पत्ता">' + esc(state.shop.addressLocal) + '</textarea></div>';
+    html += '<p class="hint" style="margin-bottom:10px">Shown to customers on the hub selection card, so they can find you for pickup.</p>';
     html += '<hr style="border:none;border-top:1px solid var(--line);margin:16px 0">';
     html += '<div class="field"><label>Staff sign-in PIN</label><input type="text" inputmode="numeric" id="in-staff-pin" value="' + esc(state.shop.staffPin) + '" placeholder="e.g. 1234"></div>';
     html += '<p class="hint" style="margin-bottom:10px">Whoever runs the counter uses this PIN behind the "Shop staff sign-in" link at the bottom of the customer app — change it from the default.</p>';
@@ -1487,6 +1496,8 @@
     else if(t.id === "in-address"){ state.ui.address = t.value; persist(); }
     else if(t.id === "in-notes"){ state.ui.notes = t.value; persist(); }
     else if(t.id === "in-owner-whatsapp"){ state.shop.ownerWhatsapp = t.value; persist(); }
+    else if(t.id === "in-shop-address"){ state.shop.address = t.value; persist(); }
+    else if(t.id === "in-shop-address-local"){ state.shop.addressLocal = t.value; persist(); }
     else if(t.id === "in-staff-pin"){ state.shop.staffPin = t.value; persist(); }
     else if(t.id === "pin-input"){ state.ui.pinInput = t.value; state.ui.pinError = ""; persist(); }
     else if(t.id === "in-new-item-name"){ state.ui.newItemName = t.value; persist(); }
