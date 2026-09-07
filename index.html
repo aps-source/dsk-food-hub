@@ -306,6 +306,8 @@
   .stepper-track .seg.done{ background:var(--green); }
   .stepper-track .seg.now{ background:var(--gold); }
   .stepper-labels{ display:flex; font-size:10px; color:var(--ink-soft); font-weight:700; text-transform:uppercase; letter-spacing:.03em; justify-content:space-between; margin-bottom:12px;}
+  .stepper-labels span{ display:flex; flex-direction:column; align-items:center; gap:3px; flex:1; }
+  .stepper-labels b{ font-family:'IBM Plex Mono'; font-weight:700; font-size:9px; letter-spacing:0; text-transform:none; color:var(--ink-soft); }
 
   .kv-row{ display:flex; justify-content:space-between; padding:6px 0; font-size:13.5px; border-bottom:1px solid var(--line); }
   .kv-row:last-child{ border-bottom:none; }
@@ -319,29 +321,51 @@
   .stat-tile .num{ font-family:'IBM Plex Mono'; font-size:24px; font-weight:700; }
   .stat-tile .lbl{ font-size:11.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em; margin-top:2px; }
 
+  /* ============ Owner: tabs + orders page ============ */
+  .owner-tabs{ display:flex; gap:6px; margin-top:18px; }
+  .owner-tab-btn{
+    border:1px solid var(--line); background:var(--surface); color:var(--ink-soft); font-weight:700; font-size:13.5px;
+    padding:9px 16px; border-radius:10px; cursor:pointer;
+  }
+  .owner-tab-btn[aria-pressed="true"]{ background:var(--ink); border-color:var(--ink); color:var(--paper); }
+  .owner-tab-btn:hover:not([aria-pressed="true"]){ border-color:var(--teal); color:var(--ink); }
+  .orders-page-head{ margin:18px 0 4px; }
+
   /* ============ Owner: order queue ============ */
   .queue-row{
     border:1px solid var(--line); border-radius:13px; padding:13px 15px; margin-bottom:10px; background:var(--surface);
-    display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px;
-    border-left-width:4px;
+    border-left-width:4px; transition:opacity .15s, filter .15s;
   }
+  .queue-main{ display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; }
+  .queue-row.is-closed{ opacity:.55; filter:grayscale(.4); }
+  .queue-row.is-closed:hover{ opacity:.85; filter:grayscale(.15); }
   .qr-PENDING{ border-left-color: var(--ink-soft); }
   .qr-ACCEPTED{ border-left-color: var(--teal); }
   .qr-PREPARING{ border-left-color: var(--gold); }
   .qr-READY{ border-left-color: var(--green); }
-  .qr-COMPLETED{ border-left-color: var(--line); opacity:.72; }
-  .qr-REJECTED, .qr-CANCELLED{ border-left-color: var(--red); opacity:.72; }
+  .qr-COMPLETED{ border-left-color: var(--line); }
+  .qr-REJECTED, .qr-CANCELLED{ border-left-color: var(--red); }
   .queue-token{ font-family:'IBM Plex Mono'; font-weight:700; font-size:15px; min-width:74px; }
   .queue-who{ min-width:120px; }
   .queue-who .nm{ font-weight:700; font-size:13.5px; }
   .queue-who .ph{ color:var(--ink-soft); font-size:11.5px; font-family:'IBM Plex Mono'; }
   .queue-items{ flex:1; min-width:160px; color:var(--ink-soft); font-size:12.5px; }
   .queue-amt{ font-family:'IBM Plex Mono'; font-weight:700; }
-  .queue-actions{ display:flex; gap:6px; flex-wrap:wrap; margin-left:auto; }
+  .queue-actions{ display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
   .fulfil-icon{ font-size:13px; }
   .paid-pill{ font-size:10.5px; font-weight:800; padding:2px 8px; border-radius:999px; text-transform:uppercase; letter-spacing:.03em; }
   .paid-DUE{ background:var(--red-soft); color:var(--red); }
   .paid-PAID{ background:var(--green-soft); color:var(--green); }
+
+  .stage-line{ display:flex; align-items:flex-start; gap:4px; margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); font-size:10.5px; color:var(--red); }
+  .stage-line .stage-dot{ display:flex; flex-direction:column; align-items:center; gap:2px; min-width:52px; text-align:center; color:var(--ink-soft); font-weight:600; }
+  .stage-line .stage-dot.reached{ color:var(--ink); }
+  .stage-line .stage-dot.current{ color:var(--gold-ink); }
+  .stage-line .stage-dot b{ font-family:'IBM Plex Mono'; font-weight:700; font-size:9.5px; color:var(--ink-soft); }
+  .stage-line .stage-sep{ flex:1; height:2px; background:var(--line); margin-top:6px; min-width:6px; }
+  .stage-line .stage-sep.done{ background:var(--green); }
+
+  .occasion-flag{ display:inline-flex; align-items:center; gap:3px; font-size:10.5px; font-weight:700; color:var(--teal); background:var(--teal-soft); padding:2px 7px; border-radius:6px; }
 
   .reject-panel{ width:100%; background:var(--surface-2); border-radius:10px; padding:10px; margin-top:6px; }
   .reject-panel .row{ display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap; }
@@ -473,19 +497,20 @@
       weeklyHolidays: []
     },
     menu: [
-      {id:"tandul",    name:"Tandul Bhakri", local:"तांदूळ भाकरी", price:25, available:true},
-      {id:"jowar",     name:"Jowar Bhakri",  local:"ज्वारी भाकरी",  price:25, available:true},
-      {id:"bajra",     name:"Bajra Bhakri",  local:"बाजरी भाकरी",  price:25, available:true},
-      {id:"nachni",    name:"Nachni Bhakri", local:"नाचणी भाकरी",  price:30, available:true},
-      {id:"chapati",   name:"Chapati",       local:"चपाती",       price:10, available:true},
-      {id:"puranpoli", name:"Puran Poli",    local:"पुरण पोळी",    price:45, available:true},
-      {id:"modak",     name:"Modak",         local:"मोदक",        price:45, available:true}
+      {id:"tandul",    name:"Tandul Bhakri", local:"तांदूळ भाकरी", price:25, available:true, occasion:""},
+      {id:"jowar",     name:"Jowar Bhakri",  local:"ज्वारी भाकरी",  price:25, available:true, occasion:""},
+      {id:"bajra",     name:"Bajra Bhakri",  local:"बाजरी भाकरी",  price:25, available:true, occasion:""},
+      {id:"nachni",    name:"Nachni Bhakri", local:"नाचणी भाकरी",  price:30, available:true, occasion:""},
+      {id:"chapati",   name:"Chapati",       local:"चपाती",       price:10, available:true, occasion:""},
+      {id:"puranpoli", name:"Puran Poli",    local:"पुरण पोळी",    price:45, available:true, occasion:""},
+      {id:"modak",     name:"Modak",         local:"मोदक",        price:45, available:true, occasion:""}
     ],
     counter: { date: todayStr(), next: 1 },
     orders: [],
     ui: { role:"customer", ownerUnlocked:false, showPin:false, pinInput:"", pinError:"",
           customerStep:"welcome", cart:{}, fulfilment:"PICKUP", name:"", phone:"", address:"", notes:"",
-          activeOrderId:null, rejecting:null, resetArm:false }
+          activeOrderId:null, rejecting:null, resetArm:false,
+          ownerTab:"orders", newItemName:"", newItemLocal:"", newItemPrice:"", newItemOccasion:"" }
   };
 
   function load(){
@@ -855,12 +880,14 @@
       html += '<div style="background:var(--surface-2);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13.5px;color:var(--ink-soft)">Menu is browsable, but ordering opens again once the hub reopens.</div>';
     }
     html += '<div class="section-title">Menu</div>';
+    if(state.menu.length === 0) html += '<div class="empty-note">No items on the menu right now.</div>';
     state.menu.forEach(function(item){
       var qty = state.ui.cart[item.id] || 0;
       var isSpecial = item.id === state.shop.todaySpecialId;
       html += '<div class="menu-row">';
       html += '<div class="info"><span class="name">' + esc(item.name) + '</span>';
       if(isSpecial) html += '<span class="special-flag">★ Special</span>';
+      if(item.occasion) html += '<span class="occasion-flag" style="margin-left:8px">🎉 ' + esc(item.occasion) + '</span>';
       if(!item.available) html += '<span class="unavailable-flag">Sold out</span>';
       html += '<div class="local">' + esc(item.local) + '</div></div>';
       html += '<div class="price">' + money(item.price) + '</div>';
@@ -897,13 +924,20 @@
     html += '<span class="status-pill st-' + order.status + '">' + order.status + '</span></div>';
 
     if(!terminal){
+      var stageLabels = ["Placed","Accepted","Preparing","Ready","Done"];
       html += '<div class="stepper-track">';
       stages.forEach(function(s, i){ html += '<div class="seg ' + (i<idx?"done":(i===idx?"now":"")) + '"></div>'; });
       html += '</div>';
-      html += '<div class="stepper-labels"><span>Placed</span><span>Accepted</span><span>Preparing</span><span>Ready</span><span>Done</span></div>';
+      html += '<div class="stepper-labels">';
+      stages.forEach(function(s, i){
+        var t = order.stageTimes && order.stageTimes[s];
+        html += '<span>' + stageLabels[i] + (i<=idx && t ? ('<b>'+fmtTime(t)+'</b>') : '') + '</span>';
+      });
+      html += '</div>';
     } else {
+      var termTime = order.stageTimes && order.stageTimes[order.status];
       html += '<div style="background:var(--red-soft);color:var(--red);border-radius:9px;padding:9px 12px;font-size:13px;margin:10px 0">' +
-        (order.status==="REJECTED" ? "Not accepted" : "Cancelled") + (order.rejectReason ? " — " + esc(order.rejectReason) : "") + '</div>';
+        (order.status==="REJECTED" ? "Not accepted" : "Cancelled") + (termTime ? (" · " + fmtTime(termTime)) : "") + (order.rejectReason ? " — " + esc(order.rejectReason) : "") + '</div>';
     }
 
     if(order.status === "PENDING" || order.status === "ACCEPTED" || order.status === "PREPARING"){
@@ -982,6 +1016,46 @@
 
   /* ---------- Owner view ---------- */
   function ownerView(){
+    var tabsHtml = renderOwnerTabs();
+    return tabsHtml + (state.ui.ownerTab === "manage" ? renderOwnerManage() : renderOwnerOrders());
+  }
+
+  function renderOwnerTabs(){
+    var isOrders = state.ui.ownerTab !== "manage";
+    return '<div class="owner-tabs">' +
+      '<button class="owner-tab-btn" data-owner-tab="orders" aria-pressed="' + isOrders + '">📋 Orders</button>' +
+      '<button class="owner-tab-btn" data-owner-tab="manage" aria-pressed="' + (!isOrders) + '">⚙️ Manage hub</button>' +
+    '</div>';
+  }
+
+  // Orders tab: nothing but the orders themselves — open ones active and on top, closed ones inactive underneath.
+  function renderOwnerOrders(){
+    var today = todaysOrders();
+    var isOpenOrder = function(o){ return o.status !== "COMPLETED" && o.status !== "REJECTED" && o.status !== "CANCELLED"; };
+    var openOrders = today.filter(isOpenOrder).sort(function(a,b){ return a.tokenSeq - b.tokenSeq; });
+    var closedOrders = today.filter(function(o){ return !isOpenOrder(o); }).sort(function(a,b){ return b.updatedAt - a.updatedAt; });
+
+    var html = '<div class="orders-page-head">';
+    html += '<h2 class="display" style="font-size:20px;margin-bottom:2px">Today\'s orders</h2>';
+    html += '<p class="sub">' + fmtDate(todayStr()) + ' · ' + openOrders.length + ' open · ' + closedOrders.length + ' closed</p>';
+    html += '</div>';
+
+    if(openOrders.length === 0 && closedOrders.length === 0){
+      html += '<div class="empty-state" style="margin-top:30px"><div class="big">🧺</div>No orders yet today.</div>';
+      return html;
+    }
+    if(openOrders.length === 0){
+      html += '<div class="hint" style="margin:4px 0 16px">Nothing waiting on you right now.</div>';
+    }
+    openOrders.forEach(function(o){ html += renderQueueRow(o, true); });
+    if(closedOrders.length){
+      html += '<div class="section-title" style="margin-top:22px">Closed out today</div>';
+      closedOrders.forEach(function(o){ html += renderQueueRow(o, false); });
+    }
+    return html;
+  }
+
+  function renderOwnerManage(){
     var today = todaysOrders();
     var completed = today.filter(function(o){ return o.status === "COMPLETED"; });
     var sales = completed.reduce(function(s,o){ return s + o.total; }, 0);
@@ -998,25 +1072,7 @@
     html += '<div class="grid2">';
     html += '<div>';
 
-    // Owner to take action — open orders first, closed ones sink to the bottom
-    html += '<div class="card accent-owner">';
-    html += '<h2>Owner to take action</h2><p class="sub">Today\'s live order queue · ' + fmtDate(todayStr()) + '</p>';
-    var isOpenOrder = function(o){ return o.status !== "COMPLETED" && o.status !== "REJECTED" && o.status !== "CANCELLED"; };
-    var openOrders = today.filter(isOpenOrder).sort(function(a,b){ return a.tokenSeq - b.tokenSeq; });
-    var closedOrders = today.filter(function(o){ return !isOpenOrder(o); }).sort(function(a,b){ return b.updatedAt - a.updatedAt; });
-    if(openOrders.length === 0 && closedOrders.length === 0){
-      html += '<div class="empty-state"><div class="big">🧺</div>No orders yet today.</div>';
-    } else {
-      if(openOrders.length === 0) html += '<div class="hint" style="margin-bottom:10px">Nothing waiting on you right now.</div>';
-      openOrders.forEach(function(o){ html += renderQueueRow(o); });
-      if(closedOrders.length){
-        html += '<div class="section-title" style="margin-top:16px">Closed out today</div>';
-        closedOrders.forEach(function(o){ html += renderQueueRow(o); });
-      }
-    }
-    html += '</div>';
-
-    // Daily sales log
+    // Daily sales log — per-order log plus a per-item breakdown
     html += '<div class="card accent-owner">';
     html += '<h2>Daily sales log</h2><p class="sub">Every order today, oldest first — for reconciling the till.</p>';
     if(today.length === 0){
@@ -1029,6 +1085,14 @@
           ' <span class="hint">(' + (o.fulfilment==="DELIVERY"?"delivery":"pickup") + ')</span></span>' +
           '<span class="v">' + money(o.total) + ' <span class="status-pill st-' + o.status + '" style="font-size:9.5px;margin-left:4px">' + o.status + '</span></span></div>';
       });
+
+      var itemSales = itemSalesToday();
+      if(itemSales.length){
+        html += '<div class="section-title" style="margin-top:18px">Item sales today</div>';
+        itemSales.forEach(function(row, i){
+          html += '<div class="kv-row"><span class="k">' + (i===0 ? '🏆 ' : '') + esc(row.name) + ' <span class="hint">× ' + row.qty + '</span></span><span class="v">' + money(row.revenue) + '</span></div>';
+        });
+      }
     }
     var waSummary = waLink(state.shop.ownerWhatsapp, dailySummaryText());
     html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">';
@@ -1040,6 +1104,38 @@
     html += '<button class="btn btn-sm" id="btn-export-csv">⬇️ Download as Excel (CSV)</button>';
     html += '</div>';
     html += '<p class="hint" style="margin-top:8px">WhatsApp sends the summary as text you tap to send — it can\'t attach the CSV automatically. Download the file here, then attach it to the WhatsApp chat yourself if you want the spreadsheet sent too.</p>';
+    html += '</div>';
+
+    // Today's special
+    html += '<div class="card accent-owner">';
+    html += '<h2>Today\'s special</h2>';
+    html += '<select id="sel-special">';
+    html += '<option value="">— none —</option>';
+    state.menu.forEach(function(m){ html += '<option value="' + m.id + '" ' + (m.id===state.shop.todaySpecialId?'selected':'') + '>' + esc(m.name) + '</option>'; });
+    html += '</select></div>';
+
+    // Menu editor
+    html += '<div class="card accent-owner">';
+    html += '<h2>Menu</h2><p class="sub">Prices, availability and occasion tags — live for customers. Add extra items for festivals or special occasions any time.</p>';
+    state.menu.forEach(function(m){
+      html += '<div class="menu-edit-row">';
+      html += '<div><div class="nm">' + esc(m.name) + (m.occasion ? ' <span class="occasion-flag">🎉 ' + esc(m.occasion) + '</span>' : '') + '</div><div class="lc">' + esc(m.local) + '</div></div>';
+      html += '<input type="number" min="0" step="5" class="mono" data-price="' + m.id + '" value="' + m.price + '">';
+      html += '<label class="switch" title="Available"><input type="checkbox" data-avail="' + m.id + '" ' + (m.available?'checked':'') + '><span class="track"></span></label>';
+      html += '<button class="btn btn-ghost btn-sm" data-remove-item="' + m.id + '" title="Remove item">🗑</button>';
+      html += '</div>';
+    });
+    html += '<div class="section-title" style="margin-top:16px">Add an item</div>';
+    html += '<p class="hint" style="margin-bottom:10px">Good for one-off festival or special-occasion dishes — add it now, mark it unavailable again once the occasion passes.</p>';
+    html += '<div class="field-row">';
+    html += '<div class="field"><label>Name</label><input type="text" id="in-new-item-name" value="' + esc(state.ui.newItemName) + '" placeholder="e.g. Ukadiche Modak"></div>';
+    html += '<div class="field"><label>Local name (optional)</label><input type="text" id="in-new-item-local" value="' + esc(state.ui.newItemLocal) + '" placeholder="उकडीचे मोदक"></div>';
+    html += '</div>';
+    html += '<div class="field-row">';
+    html += '<div class="field"><label>Price ₹</label><input type="number" min="0" step="5" id="in-new-item-price" value="' + esc(state.ui.newItemPrice) + '" placeholder="45"></div>';
+    html += '<div class="field"><label>Occasion (optional)</label><input type="text" id="in-new-item-occasion" value="' + esc(state.ui.newItemOccasion) + '" placeholder="e.g. Ganesh Chaturthi"></div>';
+    html += '</div>';
+    html += '<button class="btn btn-owner btn-sm" id="btn-add-item">+ Add item</button>';
     html += '</div>';
 
     html += '</div>'; // left col
@@ -1118,27 +1214,6 @@
     html += '<button class="btn btn-ghost btn-sm" id="btn-lock-now" style="color:var(--red)">🔒 Lock owner view on this device</button>';
     html += '</div>';
 
-    // Today's special
-    html += '<div class="card accent-owner">';
-    html += '<h2>Today\'s special</h2>';
-    html += '<select id="sel-special">';
-    html += '<option value="">— none —</option>';
-    state.menu.forEach(function(m){ html += '<option value="' + m.id + '" ' + (m.id===state.shop.todaySpecialId?'selected':'') + '>' + esc(m.name) + '</option>'; });
-    html += '</select></div>';
-
-    // Menu editor
-    html += '<div class="card accent-owner">';
-    html += '<h2>Menu</h2><p class="sub">Prices and availability, live for customers.</p>';
-    state.menu.forEach(function(m){
-      html += '<div class="menu-edit-row">';
-      html += '<div><div class="nm">' + esc(m.name) + '</div><div class="lc">' + esc(m.local) + '</div></div>';
-      html += '<input type="number" min="0" step="5" class="mono" data-price="' + m.id + '" value="' + m.price + '">';
-      html += '<label class="switch" title="Available"><input type="checkbox" data-avail="' + m.id + '" ' + (m.available?'checked':'') + '><span class="track"></span></label>';
-      html += '<span class="hint">' + (m.available?'available':'sold out') + '</span>';
-      html += '</div>';
-    });
-    html += '</div>';
-
     html += '<div class="card" style="text-align:center">';
     if(!state.ui.resetArm){
       html += '<button class="btn btn-ghost btn-sm" id="btn-reset-arm" style="color:var(--red)">Reset demo data</button>';
@@ -1158,9 +1233,43 @@
     return '<div class="stat-tile"><div class="num">' + num + '</div><div class="lbl">' + lbl + '</div></div>';
   }
 
+  function itemSalesToday(){
+    var counts = {};
+    todaysOrders().forEach(function(o){
+      if(o.status === "REJECTED" || o.status === "CANCELLED") return;
+      o.items.forEach(function(l){
+        if(!counts[l.name]) counts[l.name] = { name:l.name, qty:0, revenue:0 };
+        counts[l.name].qty += l.qty;
+        counts[l.name].revenue += l.qty * l.price;
+      });
+    });
+    return Object.keys(counts).map(function(k){ return counts[k]; }).sort(function(a,b){ return b.qty - a.qty; });
+  }
+
+  var STAGE_ORDER = ["PENDING","ACCEPTED","PREPARING","READY","COMPLETED"];
+  var STAGE_LABEL = { PENDING:"Placed", ACCEPTED:"Accepted", PREPARING:"Preparing", READY:"Ready", COMPLETED:"Done" };
+  function renderStageTimeline(o){
+    if(o.status === "REJECTED" || o.status === "CANCELLED"){
+      var bt = o.stageTimes && o.stageTimes[o.status];
+      return '<div class="stage-line">✕ ' + (o.status==="REJECTED"?"Rejected":"Cancelled") + (bt ? (" · " + fmtTime(bt)) : "") + '</div>';
+    }
+    var idx = STAGE_ORDER.indexOf(o.status);
+    var html = '<div class="stage-line">';
+    STAGE_ORDER.forEach(function(s, i){
+      var reached = i <= idx;
+      var t = o.stageTimes && o.stageTimes[s];
+      html += '<span class="stage-dot' + (reached?' reached':'') + (i===idx?' current':'') + '">' + STAGE_LABEL[s] + (reached && t ? ('<b>'+fmtTime(t)+'</b>') : '') + '</span>';
+      if(i < STAGE_ORDER.length-1) html += '<span class="stage-sep' + (i<idx?' done':'') + '"></span>';
+    });
+    html += '</div>';
+    return html;
+  }
+
   var REASON_CHIPS = ["Item unavailable","Shop closing","At capacity","Other"];
-  function renderQueueRow(o){
-    var html = '<div class="queue-row qr-' + o.status + '">';
+  function renderQueueRow(o, isOpen){
+    var stateClass = isOpen ? "is-open" : "is-closed";
+    var html = '<div class="queue-row ' + stateClass + ' qr-' + o.status + '">';
+    html += '<div class="queue-main">';
     html += '<div class="queue-token">' + esc(o.tokenDisplay) + '</div>';
     html += '<div class="queue-who"><div class="nm">' + esc(o.name) + '</div><div class="ph">' + esc(o.phone) + '</div></div>';
     html += '<div class="queue-items"><span class="fulfil-icon">' + (o.fulfilment==="DELIVERY"?"🛵":"🚶") + '</span> ' + o.items.map(function(l){ return l.qty+'×'+esc(l.name); }).join(", ") + (o.notes ? ' — "' + esc(o.notes) + '"' : '') + '</div>';
@@ -1169,6 +1278,8 @@
     if(o.status==="READY" || o.status==="COMPLETED"){
       html += '<span class="paid-pill paid-' + o.paymentStatus + '">' + (o.paymentStatus==="PAID"?"Paid":"Due") + '</span>';
     }
+    html += '</div>';
+    html += renderStageTimeline(o);
 
     html += '<div class="queue-actions">';
     var custWa = waLink(o.phone, statusUpdateText(o));
@@ -1223,6 +1334,29 @@
     if(t.id === "pin-backdrop"){ state.ui.showPin = false; persist(); render(); return; }
     if(t.id === "btn-pin-cancel"){ state.ui.showPin = false; persist(); render(); return; }
     if(t.id === "btn-pin-submit"){ submitPin(); return; }
+
+    var ownerTab;
+    if((ownerTab = attr(t,"data-owner-tab"))){ state.ui.ownerTab = ownerTab; persist(); render(); return; }
+
+    var rmId;
+    if((rmId = attr(t,"data-remove-item"))){
+      state.menu = state.menu.filter(function(m){ return m.id !== rmId; });
+      if(state.shop.todaySpecialId === rmId) state.shop.todaySpecialId = "";
+      delete state.ui.cart[rmId];
+      persist(); render(); toast("Item removed"); return;
+    }
+    if(t.id === "btn-add-item"){
+      var nName = (state.ui.newItemName||"").trim();
+      var nPrice = parseInt(state.ui.newItemPrice,10);
+      if(!nName){ toast("Give the new item a name first."); return; }
+      if(!(nPrice >= 0)){ toast("Give the new item a valid price."); return; }
+      state.menu.push({
+        id: uid(), name: nName, local: (state.ui.newItemLocal||"").trim(),
+        price: nPrice, available: true, occasion: (state.ui.newItemOccasion||"").trim()
+      });
+      state.ui.newItemName = ""; state.ui.newItemLocal = ""; state.ui.newItemPrice = ""; state.ui.newItemOccasion = "";
+      persist(); render(); toast("Added " + nName + " to the menu"); return;
+    }
 
     if(t.id === "btn-enter-hubs"){ state.ui.customerStep = "hubs"; persist(); render(); return; }
     if(t.id === "btn-to-welcome"){ state.ui.customerStep = "welcome"; persist(); render(); return; }
@@ -1332,6 +1466,10 @@
     else if(t.id === "in-owner-whatsapp"){ state.shop.ownerWhatsapp = t.value; persist(); }
     else if(t.id === "in-staff-pin"){ state.shop.staffPin = t.value; persist(); }
     else if(t.id === "pin-input"){ state.ui.pinInput = t.value; state.ui.pinError = ""; persist(); }
+    else if(t.id === "in-new-item-name"){ state.ui.newItemName = t.value; persist(); }
+    else if(t.id === "in-new-item-local"){ state.ui.newItemLocal = t.value; persist(); }
+    else if(t.id === "in-new-item-price"){ state.ui.newItemPrice = t.value; persist(); }
+    else if(t.id === "in-new-item-occasion"){ state.ui.newItemOccasion = t.value; persist(); }
   }
 
   function placeOrder(){
@@ -1362,7 +1500,8 @@
       paymentStatus: "DUE",
       rejectReason: "",
       createdAt: Date.now(),
-      updatedAt: Date.now()
+      updatedAt: Date.now(),
+      stageTimes: { PENDING: Date.now() }
     };
     state.orders.push(order);
     state.ui.cart = {};
@@ -1377,6 +1516,7 @@
     var o = state.orders.find(function(x){ return x.id===id; });
     if(!o) return;
     o.status = status; o.updatedAt = Date.now();
+    o.stageTimes = o.stageTimes || {}; o.stageTimes[status] = Date.now();
     persist(); render();
     toast(o.tokenDisplay + " → " + status.charAt(0)+status.slice(1).toLowerCase());
   }
@@ -1390,9 +1530,11 @@
     var o = state.orders.find(function(x){ return x.id===id; });
     if(!o) return;
     o.status = "REJECTED"; o.rejectReason = reason || "Not specified"; o.updatedAt = Date.now();
+    o.stageTimes = o.stageTimes || {}; o.stageTimes.REJECTED = Date.now();
     state.ui.rejecting = null;
     persist(); render(); toast(o.tokenDisplay + " rejected");
   }
+  function fmtTime(ts){ return new Date(ts).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}); }
 
   function submitPin(){
     var entered = (state.ui.pinInput||"").trim();
