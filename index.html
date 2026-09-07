@@ -394,6 +394,7 @@
   .hub-tile h3{ font-size:17px; }
   .hub-tile .local{ margin:0; color:var(--ink-soft); font-size:12px; }
   .hub-tile-meta{ font-size:12.5px; color:var(--ink-soft); }
+  .hub-tile-hours{ font-size:12px; color:var(--teal); font-weight:600; }
   .hub-tile-special{ font-size:12px; color:var(--gold-ink); font-weight:700; }
   .hub-tile-cta{ margin-top:auto; padding-top:8px; font-weight:800; font-size:12.5px; color:var(--gold-ink); }
   .hub-tile-ghost{
@@ -786,6 +787,14 @@
     '</div>';
   }
 
+  function formatTime12(hhmm){
+    if(!hhmm) return "";
+    var parts = hhmm.split(":"); var h = +parts[0], m = parts[1];
+    var ap = h >= 12 ? "PM" : "AM";
+    var h12 = h % 12; if(h12 === 0) h12 = 12;
+    return h12 + ":" + m + " " + ap;
+  }
+
   function renderHubGrid(){
     var cs = computeShopState();
     var ahead = activeOrdersAheadOf(Infinity);
@@ -795,6 +804,15 @@
     metaBits.push(cs.state === "OPEN" ? ("⏱ " + eta.min + "–" + eta.max + " min") : (cs.state === "HOLIDAY" ? "On leave" : "Closed"));
     metaBits.push(state.shop.deliveryEnabled ? "Delivery available" : "Pickup only");
 
+    var timingsBits = [];
+    if(state.shop.openTime && state.shop.closeTime){
+      timingsBits.push("🕒 " + formatTime12(state.shop.openTime) + " – " + formatTime12(state.shop.closeTime));
+    }
+    var weeklyOff = (state.shop.weeklyHolidays||[]).slice().sort();
+    if(weeklyOff.length){
+      timingsBits.push("Closed " + weeklyOff.map(function(d){ return WEEKDAY_SHORT[d]; }).join("/"));
+    }
+
     var html = '<button class="crumb" id="btn-to-welcome">← DSK Food Hub</button>';
     html += '<h2 class="display" style="font-size:22px;margin-bottom:2px">Choose a food hub</h2>';
     html += '<p class="sub" style="margin-bottom:6px">One hub live so far — more will appear here as they join.</p>';
@@ -803,6 +821,7 @@
       '<div>' + badgeForStatus(cs) + '</div>' +
       '<h3>' + esc(state.shop.name) + '</h3>' +
       '<p class="local">' + esc(state.shop.local) + '</p>' +
+      (timingsBits.length ? ('<div class="hub-tile-hours">' + timingsBits.join(" · ") + '</div>') : '') +
       '<div class="hub-tile-meta">' + metaBits.join(" · ") + '</div>' +
       (special ? ('<div class="hub-tile-special">★ Today: ' + esc(special.name) + ' ' + money(special.price) + '</div>') : '') +
       '<div class="hub-tile-cta">View menu →</div>' +
