@@ -1,0 +1,1419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DSK Food Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vesper+Libre:wght@500;700&family=Karla:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ============ Design tokens ============ */
+  :root{
+    --paper:#FBF6EC;
+    --surface:#FFFFFF;
+    --surface-2:#F3EBDA;
+    --ink:#2A1D14;
+    --ink-soft:#7A6753;
+    --line:#E8DCC8;
+    --gold:#C98A12;
+    --gold-ink:#7A560D;
+    --gold-soft:#F3E1B4;
+    --green:#4F7A3D;
+    --green-soft:#E1EDD7;
+    --red:#B23A2E;
+    --red-soft:#F5DEDA;
+    --teal:#2F4A43;
+    --teal-soft:#DCE7E3;
+    --shadow: 0 1px 2px rgba(42,29,20,.06), 0 8px 24px -12px rgba(42,29,20,.18);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#1B140D;
+      --surface:#241B12;
+      --surface-2:#2E2216;
+      --ink:#F3E9DA;
+      --ink-soft:#B7A48D;
+      --line:#3A2E20;
+      --gold:#E0A530;
+      --gold-ink:#F6D48A;
+      --gold-soft:#3E3116;
+      --green:#7FAE68;
+      --green-soft:#26331F;
+      --red:#E2685A;
+      --red-soft:#3B231F;
+      --teal:#6FA69A;
+      --teal-soft:#1E2E2A;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 28px -14px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#1B140D;
+    --surface:#241B12;
+    --surface-2:#2E2216;
+    --ink:#F3E9DA;
+    --ink-soft:#B7A48D;
+    --line:#3A2E20;
+    --gold:#E0A530;
+    --gold-ink:#F6D48A;
+    --gold-soft:#3E3116;
+    --green:#7FAE68;
+    --green-soft:#26331F;
+    --red:#E2685A;
+    --red-soft:#3B231F;
+    --teal:#6FA69A;
+    --teal-soft:#1E2E2A;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 28px -14px rgba(0,0,0,.6);
+  }
+
+  *{ box-sizing:border-box; }
+  html{ color-scheme: light dark; }
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:'Karla',-apple-system,'Segoe UI',sans-serif;
+    font-size:15.5px; line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,.display{ font-family:'Vesper Libre', Georgia, serif; text-wrap:balance; margin:0; }
+  .mono{ font-family:'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  a{ color: var(--gold-ink); }
+  button{ font-family:inherit; }
+  ::selection{ background: var(--gold-soft); }
+  :focus-visible{ outline: 2px solid var(--gold); outline-offset: 2px; }
+
+  .wrap{ max-width: 1080px; margin: 0 auto; padding: 0 18px 64px; }
+
+  /* ============ Top bar ============ */
+  .topbar{
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar-inner{
+    max-width:1080px; margin:0 auto; padding:16px 18px;
+    display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand-mark{
+    width:38px; height:38px; border-radius:10px; flex:none;
+    background: linear-gradient(155deg, var(--gold), var(--red));
+    display:flex; align-items:center; justify-content:center; font-size:19px;
+  }
+  .brand h1{ font-size:20px; font-weight:700; letter-spacing:.2px; }
+  .brand p{ margin:1px 0 0; font-size:12px; color:var(--ink-soft); letter-spacing:.04em; text-transform:uppercase; }
+
+  .mode-pill{
+    display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:999px;
+    font-weight:800; font-size:12.5px; letter-spacing:.02em; background:var(--teal-soft); color:var(--teal);
+  }
+  .staff-switch{ display:flex; align-items:center; background:var(--surface-2); border-radius:999px; padding:3px; gap:2px; }
+  .staff-btn{
+    border:none; background:transparent; padding:8px 14px; border-radius:999px;
+    font-weight:700; font-size:13px; color:var(--ink-soft); cursor:pointer;
+  }
+  .staff-btn[aria-pressed="true"]{ background:var(--ink); color:var(--paper); }
+  .staff-btn:hover:not([aria-pressed="true"]){ color:var(--ink); }
+  .staff-btn.lock{ font-size:14px; padding:8px 10px; }
+
+  .staff-link{
+    background:none; border:none; color:var(--ink-soft); font-size:11px; text-decoration:underline;
+    cursor:pointer; padding:2px 0; font-family:inherit;
+  }
+  .staff-link:hover{ color:var(--ink); }
+
+  .modal-backdrop{
+    position:fixed; inset:0; background:rgba(20,14,8,.5); display:flex; align-items:center; justify-content:center;
+    padding:20px; z-index:60;
+  }
+  .modal-card{
+    background:var(--surface); border-radius:16px; padding:22px; width:100%; max-width:320px; box-shadow:var(--shadow);
+  }
+  .modal-card h3{ font-size:17px; margin-bottom:4px; }
+  .modal-card .sub{ margin-bottom:14px; }
+  .modal-card input{ text-align:center; letter-spacing:.3em; font-family:'IBM Plex Mono'; font-size:18px; }
+
+  /* ============ Status ribbon ============ */
+  .ribbon{
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+    padding:12px 18px; margin: 18px 0 0; border-radius:14px;
+    background:var(--surface); border:1px solid var(--line); box-shadow:var(--shadow);
+  }
+  .badge{
+    display:inline-flex; align-items:center; gap:6px; padding:4px 11px; border-radius:999px;
+    font-size:12.5px; font-weight:700; letter-spacing:.02em; white-space:nowrap;
+  }
+  .badge .dot{ width:7px; height:7px; border-radius:50%; }
+  .badge-open{ background:var(--green-soft); color:var(--green); }
+  .badge-open .dot{ background:var(--green); }
+  .badge-closed{ background:var(--red-soft); color:var(--red); }
+  .badge-closed .dot{ background:var(--red); }
+  .badge-holiday{ background:var(--gold-soft); color:var(--gold-ink); }
+  .badge-holiday .dot{ background:var(--gold); }
+  .ribbon .shop-name{ font-weight:700; }
+  .ribbon .reason{ color:var(--ink-soft); font-size:13.5px; }
+  .ribbon .spacer{ flex:1; }
+  .ribbon .eta-chip{
+    font-family:'IBM Plex Mono'; font-weight:600; font-size:13px;
+    background:var(--surface-2); padding:5px 10px; border-radius:8px; color:var(--ink);
+  }
+
+  /* ============ Generic layout bits ============ */
+  .grid2{ display:grid; grid-template-columns: 1fr; gap:18px; margin-top:18px; }
+  @media (min-width: 880px){ .grid2{ grid-template-columns: 1.5fr 1fr; align-items:start; } }
+  .card{
+    background:var(--surface); border:1px solid var(--line); border-radius:16px;
+    padding:20px; box-shadow:var(--shadow);
+  }
+  .card + .card{ margin-top:16px; }
+  .card h2{ font-size:19px; margin-bottom:4px; }
+  .card .sub{ color:var(--ink-soft); font-size:13px; margin:0 0 14px; }
+  .section-title{ font-size:11.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-soft); font-weight:700; margin: 0 0 10px; }
+
+  .accent-customer{ box-shadow: inset 3px 0 0 var(--gold), var(--shadow); }
+  .accent-owner{ box-shadow: inset 3px 0 0 var(--teal), var(--shadow); }
+
+  /* ============ Buttons / inputs ============ */
+  .btn{
+    border:1px solid var(--line); background:var(--surface-2); color:var(--ink);
+    padding:9px 16px; border-radius:10px; font-weight:700; font-size:13.5px; cursor:pointer;
+    display:inline-flex; align-items:center; gap:6px; transition: transform .08s, background .15s;
+  }
+  .btn:hover{ background: var(--line); }
+  .btn:active{ transform: scale(.98); }
+  .btn-primary{ background: var(--gold); border-color: var(--gold); color:#1B140D; }
+  .btn-primary:hover{ filter:brightness(1.05); background:var(--gold); }
+  .btn-owner{ background: var(--teal); border-color: var(--teal); color:#fff; }
+  .btn-owner:hover{ filter:brightness(1.08); background:var(--teal); }
+  .btn-danger{ background: var(--red-soft); border-color: var(--red-soft); color: var(--red); }
+  .btn-danger:hover{ background: var(--red); color:#fff; }
+  .btn-ghost{ background:transparent; border-color:transparent; }
+  .btn-ghost:hover{ background:var(--surface-2); }
+  .btn-sm{ padding:6px 11px; font-size:12.5px; border-radius:8px; }
+  .btn:disabled{ opacity:.45; cursor:not-allowed; }
+  .btn[data-full]{ width:100%; justify-content:center; }
+
+  label{ display:block; font-size:12.5px; font-weight:700; color:var(--ink-soft); margin-bottom:5px; }
+  input[type=text], input[type=tel], input[type=date], input[type=number], textarea, select{
+    width:100%; background:var(--paper); border:1px solid var(--line); border-radius:9px;
+    padding:9px 11px; font-family:inherit; font-size:14px; color:var(--ink);
+  }
+  textarea{ resize:vertical; min-height:56px; }
+  .field{ margin-bottom:12px; }
+  .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .hint{ font-size:11.5px; color:var(--ink-soft); margin-top:4px; }
+  .err{ font-size:11.5px; color:var(--red); margin-top:4px; }
+
+  .switch{ position:relative; width:44px; height:25px; flex:none; }
+  .switch input{ opacity:0; width:0; height:0; position:absolute; }
+  .switch .track{
+    position:absolute; inset:0; background:var(--line); border-radius:999px; cursor:pointer; transition:background .15s;
+  }
+  .switch .track::after{
+    content:""; position:absolute; width:19px; height:19px; left:3px; top:3px; border-radius:50%;
+    background:var(--surface); transition:transform .15s; box-shadow:0 1px 2px rgba(0,0,0,.25);
+  }
+  .switch input:checked + .track{ background:var(--green); }
+  .switch input:checked + .track::after{ transform:translateX(19px); }
+
+  .chip-row{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{
+    border:1px solid var(--line); background:var(--surface-2); padding:6px 11px; border-radius:999px;
+    font-size:12.5px; font-weight:600; cursor:pointer; color:var(--ink);
+  }
+  .chip[aria-pressed="true"]{ background:var(--ink); border-color:var(--ink); color:var(--paper); }
+
+  /* ============ Menu list ============ */
+  .menu-row{
+    display:flex; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--line);
+  }
+  .menu-row:last-child{ border-bottom:none; }
+  .menu-row .info{ flex:1; min-width:0; }
+  .menu-row .name{ font-weight:700; font-size:15px; }
+  .menu-row .local{ color:var(--ink-soft); font-size:12.5px; }
+  .menu-row .price{ font-family:'IBM Plex Mono'; font-weight:600; font-size:14px; min-width:52px; text-align:right; }
+  .special-flag{ display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--gold-ink); background:var(--gold-soft); padding:2px 7px; border-radius:6px; margin-left:8px; }
+  .unavailable-flag{ font-size:10.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--red); background:var(--red-soft); padding:2px 7px; border-radius:6px; margin-left:8px; }
+
+  .stepper{ display:flex; align-items:center; gap:8px; flex:none; }
+  .stepper button{
+    width:28px; height:28px; border-radius:8px; border:1px solid var(--line); background:var(--surface-2);
+    font-size:16px; font-weight:700; cursor:pointer; color:var(--ink); line-height:1;
+  }
+  .stepper button:hover{ background:var(--line); }
+  .stepper .qty{ min-width:16px; text-align:center; font-weight:700; font-family:'IBM Plex Mono'; }
+  .add-btn{
+    border:1px solid var(--gold); color:var(--gold-ink); background:var(--gold-soft); border-radius:8px;
+    padding:6px 13px; font-weight:700; font-size:12.5px; cursor:pointer; flex:none;
+  }
+  .add-btn:hover{ filter:brightness(1.03); }
+
+  /* ============ Cart ============ */
+  .cart-line{ display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 0; font-size:14px; }
+  .cart-line .x{ background:none; border:none; color:var(--ink-soft); cursor:pointer; font-size:15px; padding:2px 6px; }
+  .cart-line .x:hover{ color:var(--red); }
+  .cart-total{ display:flex; justify-content:space-between; padding-top:10px; margin-top:6px; border-top:1px dashed var(--line); font-weight:800; font-size:16px; }
+  .empty-note{ color:var(--ink-soft); font-size:13.5px; padding:8px 0; }
+
+  .fulfil-toggle{ display:flex; gap:8px; margin-bottom:12px; }
+  .fulfil-toggle button{
+    flex:1; padding:10px; border-radius:10px; border:1px solid var(--line); background:var(--surface-2);
+    font-weight:700; font-size:13px; cursor:pointer; color:var(--ink); display:flex; flex-direction:column; align-items:center; gap:2px;
+  }
+  .fulfil-toggle button[aria-pressed="true"]{ background:var(--gold-soft); border-color:var(--gold); color:var(--gold-ink); }
+  .fulfil-toggle button:disabled{ opacity:.4; cursor:not-allowed; }
+  .fulfil-toggle small{ font-weight:500; color:var(--ink-soft); font-size:10.5px; }
+
+  /* ============ Ticket ============ */
+  .ticket{
+    display:flex; border-radius:18px; overflow:hidden; box-shadow:var(--shadow);
+    border:1px solid var(--line); background:var(--surface); position:relative;
+  }
+  .ticket-stub{
+    background: var(--ink); color: var(--paper); flex:none; width:118px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:18px 8px;
+    position:relative;
+  }
+  .ticket-stub .lbl{ font-size:9.5px; letter-spacing:.1em; text-transform:uppercase; opacity:.65; }
+  .ticket-stub .code{ font-family:'IBM Plex Mono'; font-weight:700; font-size:22px; letter-spacing:.02em; }
+  .ticket-seam{ width:0; border-left:2px dashed var(--line); position:relative; flex:none; }
+  .ticket-seam::before, .ticket-seam::after{
+    content:""; position:absolute; left:-11px; width:22px; height:22px; border-radius:50%; background:var(--paper);
+  }
+  .ticket-seam::before{ top:-11px; }
+  .ticket-seam::after{ bottom:-11px; }
+  .ticket-body{ flex:1; padding:18px 20px; min-width:0; }
+  .ticket-body .top-row{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .ticket-body h3{ font-size:16px; }
+  .ticket-body .status-pill{ flex:none; }
+  @media (max-width: 560px){
+    .ticket{ flex-direction:column; }
+    .ticket-stub{ width:auto; flex-direction:row; padding:12px 18px; }
+    .ticket-seam{ display:none; }
+    .ticket-body{ border-top:2px dashed var(--line); }
+  }
+
+  .status-pill{
+    display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:999px; font-size:11.5px; font-weight:800; letter-spacing:.03em; text-transform:uppercase;
+  }
+  .st-PENDING{ background:var(--surface-2); color:var(--ink-soft); }
+  .st-ACCEPTED{ background:var(--teal-soft); color:var(--teal); }
+  .st-PREPARING{ background:var(--gold-soft); color:var(--gold-ink); }
+  .st-READY{ background:var(--green-soft); color:var(--green); }
+  .st-COMPLETED{ background:var(--surface-2); color:var(--ink-soft); }
+  .st-REJECTED, .st-CANCELLED{ background:var(--red-soft); color:var(--red); }
+
+  .stepper-track{ display:flex; align-items:center; margin: 16px 0 6px; }
+  .stepper-track .seg{ flex:1; height:4px; background:var(--line); border-radius:2px; margin:0 3px; }
+  .stepper-track .seg.done{ background:var(--green); }
+  .stepper-track .seg.now{ background:var(--gold); }
+  .stepper-labels{ display:flex; font-size:10px; color:var(--ink-soft); font-weight:700; text-transform:uppercase; letter-spacing:.03em; justify-content:space-between; margin-bottom:12px;}
+
+  .kv-row{ display:flex; justify-content:space-between; padding:6px 0; font-size:13.5px; border-bottom:1px solid var(--line); }
+  .kv-row:last-child{ border-bottom:none; }
+  .kv-row .k{ color:var(--ink-soft); }
+  .kv-row .v{ font-weight:700; }
+
+  /* ============ Owner: stat tiles ============ */
+  .stat-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+  @media (min-width:640px){ .stat-grid{ grid-template-columns:repeat(4,1fr); } }
+  .stat-tile{ background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:14px 16px; box-shadow:var(--shadow); }
+  .stat-tile .num{ font-family:'IBM Plex Mono'; font-size:24px; font-weight:700; }
+  .stat-tile .lbl{ font-size:11.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em; margin-top:2px; }
+
+  /* ============ Owner: order queue ============ */
+  .queue-row{
+    border:1px solid var(--line); border-radius:13px; padding:13px 15px; margin-bottom:10px; background:var(--surface);
+    display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px;
+    border-left-width:4px;
+  }
+  .qr-PENDING{ border-left-color: var(--ink-soft); }
+  .qr-ACCEPTED{ border-left-color: var(--teal); }
+  .qr-PREPARING{ border-left-color: var(--gold); }
+  .qr-READY{ border-left-color: var(--green); }
+  .qr-COMPLETED{ border-left-color: var(--line); opacity:.72; }
+  .qr-REJECTED, .qr-CANCELLED{ border-left-color: var(--red); opacity:.72; }
+  .queue-token{ font-family:'IBM Plex Mono'; font-weight:700; font-size:15px; min-width:74px; }
+  .queue-who{ min-width:120px; }
+  .queue-who .nm{ font-weight:700; font-size:13.5px; }
+  .queue-who .ph{ color:var(--ink-soft); font-size:11.5px; font-family:'IBM Plex Mono'; }
+  .queue-items{ flex:1; min-width:160px; color:var(--ink-soft); font-size:12.5px; }
+  .queue-amt{ font-family:'IBM Plex Mono'; font-weight:700; }
+  .queue-actions{ display:flex; gap:6px; flex-wrap:wrap; margin-left:auto; }
+  .fulfil-icon{ font-size:13px; }
+  .paid-pill{ font-size:10.5px; font-weight:800; padding:2px 8px; border-radius:999px; text-transform:uppercase; letter-spacing:.03em; }
+  .paid-DUE{ background:var(--red-soft); color:var(--red); }
+  .paid-PAID{ background:var(--green-soft); color:var(--green); }
+
+  .reject-panel{ width:100%; background:var(--surface-2); border-radius:10px; padding:10px; margin-top:6px; }
+  .reject-panel .row{ display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap; }
+
+  /* ============ Owner: menu editor ============ */
+  .menu-edit-row{ display:grid; grid-template-columns: 1fr 90px auto auto; gap:10px; align-items:center; padding:9px 0; border-bottom:1px solid var(--line); }
+  .menu-edit-row:last-child{ border-bottom:none; }
+  .menu-edit-row .nm{ font-weight:700; font-size:13.5px; }
+  .menu-edit-row .lc{ color:var(--ink-soft); font-size:11.5px; }
+
+  /* ============ Toast ============ */
+  .toast{
+    position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(8px); opacity:0;
+    background:var(--ink); color:var(--paper); padding:11px 20px; border-radius:999px; font-weight:700; font-size:13.5px;
+    box-shadow:0 10px 30px -8px rgba(0,0,0,.4); pointer-events:none; transition:opacity .2s, transform .2s; z-index:50;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  @media (prefers-reduced-motion: reduce){ .toast{ transition:none; } }
+
+  .empty-state{ text-align:center; padding:26px 10px; color:var(--ink-soft); }
+  .empty-state .big{ font-size:30px; margin-bottom:6px; }
+
+  /* ============ Customer: welcome page ============ */
+  .welcome{ max-width:520px; margin:36px auto 10px; text-align:center; }
+  .welcome-mark{
+    width:64px; height:64px; margin:0 auto 18px; border-radius:18px;
+    background: linear-gradient(155deg, var(--gold), var(--red));
+    display:flex; align-items:center; justify-content:center; font-size:32px;
+  }
+  .welcome h2{ font-size:30px; }
+  .welcome-sub{ color:var(--ink-soft); font-size:14.5px; margin:12px 0 24px; line-height:1.6; }
+  .btn-lg{ padding:13px 26px; font-size:15px; border-radius:12px; }
+  .welcome-steps{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:30px; text-align:left; }
+  @media (max-width:560px){ .welcome-steps{ grid-template-columns:1fr; } }
+  .step-card{ background:var(--surface); border:1px solid var(--line); border-radius:13px; padding:14px; box-shadow:var(--shadow); }
+  .step-card .num{ font-family:'IBM Plex Mono'; font-weight:700; color:var(--gold-ink); background:var(--gold-soft); width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; margin-bottom:9px; }
+  .step-card .t{ font-weight:700; font-size:13.5px; margin-bottom:3px; }
+  .step-card .d{ font-size:12px; color:var(--ink-soft); line-height:1.5; }
+
+  /* ============ Customer: hub directory ============ */
+  .crumb{ display:inline-flex; align-items:center; gap:6px; color:var(--ink-soft); font-size:13px; font-weight:700; background:none; border:none; cursor:pointer; padding:4px 0; margin-bottom:12px; }
+  .crumb:hover{ color:var(--ink); }
+  .hub-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(250px,1fr)); gap:16px; margin-top:14px; }
+  .hub-tile{
+    text-align:left; background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:18px;
+    box-shadow:var(--shadow); cursor:pointer; font-family:inherit; color:var(--ink); display:flex; flex-direction:column; gap:8px;
+    transition:transform .1s, border-color .15s;
+  }
+  .hub-tile:hover{ border-color:var(--gold); transform:translateY(-2px); }
+  .hub-tile h3{ font-size:17px; }
+  .hub-tile .local{ margin:0; color:var(--ink-soft); font-size:12px; }
+  .hub-tile-meta{ font-size:12.5px; color:var(--ink-soft); }
+  .hub-tile-special{ font-size:12px; color:var(--gold-ink); font-weight:700; }
+  .hub-tile-cta{ margin-top:auto; padding-top:8px; font-weight:800; font-size:12.5px; color:var(--gold-ink); }
+  .hub-tile-ghost{
+    border:1.5px dashed var(--line); border-radius:16px; padding:18px; display:flex; align-items:center; justify-content:center;
+    text-align:center; color:var(--ink-soft); font-size:12.5px; min-height:120px; background:transparent;
+  }
+
+  footer.note{ text-align:center; color:var(--ink-soft); font-size:11.5px; margin-top:30px; line-height:1.7; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-mark">🫓</div>
+      <div>
+        <h1>DSK Food Hub</h1>
+        <p>order &middot; token &middot; pay at hub</p>
+      </div>
+    </div>
+    <div id="mode-pill-slot"></div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div id="ribbon" class="ribbon"></div>
+  <div id="app"></div>
+  <footer class="note">
+    Working prototype — every order, token and setting here lives only in this browser, so you and family can try<br>
+    the full flow end to end before it's wired to a real shared backend.<br>
+    <button class="staff-link" id="btn-open-staff" type="button">Shop staff sign-in</button>
+  </footer>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============ State ============ */
+  var STORE_KEY = "dsk_food_hub_v1";
+
+  function todayStr(){
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  }
+  function fmtDate(s){
+    if(!s) return "";
+    var parts = s.split("-"); var d = new Date(+parts[0], +parts[1]-1, +parts[2]);
+    return d.toLocaleDateString("en-IN", {day:"numeric", month:"short", year:"numeric"});
+  }
+  function uid(){ return Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4); }
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]; }); }
+
+  var DEFAULT_STATE = {
+    hub: { name: "DSK Food Hub" },
+    shop: {
+      name: "Shri Swami Samartha Bhakri Kendra",
+      local: "श्री स्वामी समर्थ भाकरी केंद्र",
+      tokenPrefix: "SSB",
+      isOpenManual: true,
+      closureReason: "",
+      holidayFrom: "",
+      holidayTo: "",
+      holidayReason: "",
+      deliveryEnabled: true,
+      parallelSlots: 2,
+      avgPrepMinutes: 8,
+      todaySpecialId: "puranpoli",
+      ownerWhatsapp: "",
+      staffPin: "1234",
+      openTime: "09:00",
+      closeTime: "21:00",
+      weeklyHolidays: []
+    },
+    menu: [
+      {id:"tandul",    name:"Tandul Bhakri", local:"तांदूळ भाकरी", price:25, available:true},
+      {id:"jowar",     name:"Jowar Bhakri",  local:"ज्वारी भाकरी",  price:25, available:true},
+      {id:"bajra",     name:"Bajra Bhakri",  local:"बाजरी भाकरी",  price:25, available:true},
+      {id:"nachni",    name:"Nachni Bhakri", local:"नाचणी भाकरी",  price:30, available:true},
+      {id:"chapati",   name:"Chapati",       local:"चपाती",       price:10, available:true},
+      {id:"puranpoli", name:"Puran Poli",    local:"पुरण पोळी",    price:45, available:true},
+      {id:"modak",     name:"Modak",         local:"मोदक",        price:45, available:true}
+    ],
+    counter: { date: todayStr(), next: 1 },
+    orders: [],
+    ui: { role:"customer", ownerUnlocked:false, showPin:false, pinInput:"", pinError:"",
+          customerStep:"welcome", cart:{}, fulfilment:"PICKUP", name:"", phone:"", address:"", notes:"",
+          activeOrderId:null, rejecting:null, resetArm:false }
+  };
+
+  function load(){
+    try{
+      var raw = localStorage.getItem(STORE_KEY);
+      if(!raw) return JSON.parse(JSON.stringify(DEFAULT_STATE));
+      var s = JSON.parse(raw);
+      // shallow-merge defaults for forward compatibility
+      s.hub = s.hub || DEFAULT_STATE.hub;
+      s.shop = Object.assign({}, DEFAULT_STATE.shop, s.shop || {});
+      s.menu = s.menu && s.menu.length ? s.menu : DEFAULT_STATE.menu;
+      s.counter = s.counter || DEFAULT_STATE.counter;
+      s.orders = s.orders || [];
+      s.ui = Object.assign({}, DEFAULT_STATE.ui, s.ui || {});
+      return s;
+    }catch(e){ return JSON.parse(JSON.stringify(DEFAULT_STATE)); }
+  }
+  var state = load();
+  (function migrate(){
+    if(state.ui.activeOrderId){
+      var o = state.orders.find(function(x){ return x.id === state.ui.activeOrderId; });
+      if(o && state.ui.customerStep === "welcome") state.ui.customerStep = "shop";
+    }
+    // the owner dashboard is only ever reachable through the PIN sign-in below —
+    // never leave a page loaded straight into it just because a stale value was saved.
+    if(!state.ui.ownerUnlocked) state.ui.role = "customer";
+    state.ui.showPin = false; state.ui.pinInput = ""; state.ui.pinError = "";
+  })();
+  function persist(){
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){}
+  }
+
+  var toastTimer=null;
+  function toast(msg){
+    var t = document.getElementById("toast");
+    t.textContent = msg; t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ t.classList.remove("show"); }, 2400);
+  }
+
+  /* ============ Derived / business logic ============ */
+  var WEEKDAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  var WEEKDAY_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+  // Precedence, matching how a real hub's status is decided:
+  // holiday dates > manual emergency closure > weekly off day > opening hours > open.
+  function computeShopState(){
+    var shop = state.shop, today = todayStr();
+    if(shop.holidayFrom && shop.holidayTo && today >= shop.holidayFrom && today <= shop.holidayTo){
+      return { state:"HOLIDAY", reason: shop.holidayReason, until: shop.holidayTo };
+    }
+    if(!shop.isOpenManual){
+      return { state:"CLOSED", reason: shop.closureReason || "Closed for now" };
+    }
+    var now = new Date();
+    var dow = now.getDay();
+    if((shop.weeklyHolidays||[]).indexOf(dow) !== -1){
+      return { state:"CLOSED", reason: "Weekly off (" + WEEKDAY_NAMES[dow] + ")" };
+    }
+    if(shop.openTime && shop.closeTime){
+      var hhmm = String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0");
+      if(hhmm < shop.openTime){
+        return { state:"CLOSED", reason: "Opens today at " + shop.openTime };
+      }
+      if(hhmm > shop.closeTime){
+        return { state:"CLOSED", reason: "Closed for the day — opens tomorrow at " + shop.openTime };
+      }
+    }
+    return { state:"OPEN" };
+  }
+
+  function todaysOrders(){
+    var today = todayStr();
+    return state.orders.filter(function(o){ return o.serviceDate === today; });
+  }
+  var ACTIVE_STATUSES = ["PENDING","ACCEPTED","PREPARING"];
+  function activeOrdersAheadOf(seq){
+    return todaysOrders().filter(function(o){
+      return ACTIVE_STATUSES.indexOf(o.status) !== -1 && o.tokenSeq < seq;
+    }).length;
+  }
+  function computeEta(activeAhead){
+    var slots = Math.max(1, state.shop.parallelSlots||2);
+    var avg = Math.max(1, state.shop.avgPrepMinutes||8);
+    var minutes = Math.ceil((activeAhead+1)/slots) * avg;
+    return { min: minutes, max: minutes + Math.max(4, Math.round(minutes*0.4)) };
+  }
+
+  function allocateToken(){
+    var today = todayStr();
+    if(state.counter.date !== today){ state.counter = { date: today, next: 1 }; }
+    var seq = state.counter.next;
+    state.counter.next = seq + 1;
+    return seq;
+  }
+  function tokenDisplay(seq){
+    return state.shop.tokenPrefix + "-" + String(seq).padStart(3,"0");
+  }
+
+  function money(n){ return "₹" + Number(n||0).toLocaleString("en-IN"); }
+
+  function badgeForStatus(cs){
+    if(cs.state === "OPEN") return '<span class="badge badge-open"><span class="dot"></span>Open now</span>';
+    if(cs.state === "HOLIDAY") return '<span class="badge badge-holiday"><span class="dot"></span>On leave</span>';
+    return '<span class="badge badge-closed"><span class="dot"></span>Closed</span>';
+  }
+
+  /* ---------- WhatsApp deep links (tap-to-send, no backend required) ---------- */
+  function digitsOnly(s){ return String(s||"").replace(/\D/g,""); }
+  function toWaNumber(raw){
+    var d = digitsOnly(raw);
+    if(!d) return "";
+    if(d.length === 10) return "91" + d;
+    return d;
+  }
+  function waLink(rawNumber, text){
+    var n = toWaNumber(rawNumber);
+    if(!n) return "";
+    return "https://wa.me/" + n + "?text=" + encodeURIComponent(text);
+  }
+  function orderSummaryText(o){
+    var lines = o.items.map(function(l){ return "- " + l.qty + "x " + l.name + " (" + money(l.price) + ")"; }).join("\n");
+    var addr = o.fulfilment === "DELIVERY" ? ("\nDeliver to: " + o.address) : "";
+    return "New order — " + state.shop.name + "\n" +
+      "Token: " + o.tokenDisplay + "\n" +
+      (o.fulfilment === "DELIVERY" ? "Home delivery" : "Pickup") + "\n" +
+      lines + "\n" +
+      "Total: " + money(o.total) + " (pay at hub)\n" +
+      "Name: " + o.name + "\nPhone: " + o.phone + addr +
+      (o.notes ? ("\nNotes: " + o.notes) : "");
+  }
+  function statusUpdateText(o){
+    if(o.status === "ACCEPTED"){
+      var ahead = activeOrdersAheadOf(o.tokenSeq), eta = computeEta(ahead);
+      return "Hi " + o.name + ", your order " + o.tokenDisplay + " at " + state.shop.name + " is accepted. Estimated wait " + eta.min + "-" + eta.max + " min. We'll message when it's ready.";
+    }
+    if(o.status === "PREPARING") return "Your order " + o.tokenDisplay + " at " + state.shop.name + " is being prepared.";
+    if(o.status === "READY") return "Your token " + o.tokenDisplay + " is READY at " + state.shop.name + "! " +
+      (o.fulfilment === "DELIVERY" ? "Your delivery is on the way." : "Please collect at the counter.") + " Amount due: " + money(o.total) + ".";
+    if(o.status === "REJECTED") return "Sorry, your order " + o.tokenDisplay + " at " + state.shop.name + " could not be accepted" + (o.rejectReason ? (": " + o.rejectReason) : ".");
+    if(o.status === "COMPLETED") return "Thanks for your order " + o.tokenDisplay + "! See you again at " + state.shop.name + ".";
+    return "Update on your order " + o.tokenDisplay + " at " + state.shop.name + ": " + o.status;
+  }
+
+  /* ---------- Daily log: WhatsApp text summary + CSV export ---------- */
+  function dailySummaryText(){
+    var list = todaysOrders().slice().sort(function(a,b){ return a.tokenSeq - b.tokenSeq; });
+    var completed = list.filter(function(o){ return o.status === "COMPLETED"; });
+    var closedOut = list.filter(function(o){ return o.status === "REJECTED" || o.status === "CANCELLED"; });
+    var stillOpen = list.filter(function(o){ return o.status !== "COMPLETED" && o.status !== "REJECTED" && o.status !== "CANCELLED"; });
+    var sales = completed.reduce(function(s,o){ return s + o.total; }, 0);
+    var pickup = list.filter(function(o){ return o.fulfilment === "PICKUP"; }).length;
+    var delivery = list.length - pickup;
+
+    var lines = [];
+    lines.push("DSK Food Hub — daily summary");
+    lines.push(state.shop.name + " · " + fmtDate(todayStr()));
+    lines.push("");
+    lines.push("Orders: " + list.length + "  (Completed " + completed.length + ", Rejected/cancelled " + closedOut.length + ", Still open " + stillOpen.length + ")");
+    lines.push("Sales (completed): " + money(sales));
+    lines.push("Pickup " + pickup + " · Delivery " + delivery);
+    lines.push("");
+    lines.push("Orders, oldest first:");
+    list.forEach(function(o){
+      lines.push(o.tokenDisplay + " " + o.status + " " + money(o.total) + " — " + o.items.map(function(l){ return l.qty+"x "+l.name; }).join(", "));
+    });
+    return lines.join("\n");
+  }
+
+  function csvEscape(v){
+    var s = String(v==null ? "" : v);
+    if(/[",\n]/.test(s)) s = '"' + s.replace(/"/g,'""') + '"';
+    return s;
+  }
+  function buildOrdersCsv(){
+    var rows = [["Token","Time","Customer","Phone","Fulfilment","Items","Amount","Status","Payment"]];
+    todaysOrders().slice().sort(function(a,b){ return a.tokenSeq - b.tokenSeq; }).forEach(function(o){
+      rows.push([
+        o.tokenDisplay,
+        new Date(o.createdAt).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}),
+        o.name, o.phone, o.fulfilment,
+        o.items.map(function(l){ return l.qty+"x "+l.name; }).join("; "),
+        o.total, o.status, o.paymentStatus
+      ]);
+    });
+    return rows.map(function(r){ return r.map(csvEscape).join(","); }).join("\r\n");
+  }
+  function downloadCsvDirect(){
+    var blob = new Blob([buildOrdersCsv()], {type:"text/csv;charset=utf-8;"});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = "dsk-food-hub-orders-" + todayStr() + ".csv";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    toast("Orders file downloaded");
+  }
+  async function exportOrdersCsv(){
+    if(!(window.claude && window.claude.use)){ downloadCsvDirect(); return; }
+    try{
+      var downloads = await window.claude.use("downloads");
+      if(!downloads){ downloadCsvDirect(); return; }
+      var res = await downloads.save({ filename: "dsk-food-hub-orders-" + todayStr() + ".csv", data: buildOrdersCsv() });
+      toast(res.status === "saved" ? "Orders file saved" : "Orders file sent");
+    }catch(e){
+      if(e && e.code === "declined") return;
+      toast("Couldn't save the file — try again.");
+    }
+  }
+
+  /* ============ Rendering ============ */
+  function render(){
+    renderTopTabs();
+    var showRibbon = state.ui.role === "owner" || state.ui.customerStep === "shop";
+    var ribbon = document.getElementById("ribbon");
+    if(showRibbon){ ribbon.style.display=""; renderRibbon(); } else { ribbon.style.display="none"; }
+    var app = document.getElementById("app");
+    app.innerHTML = (state.ui.role === "owner" ? ownerView() : customerView()) + renderPinPanel();
+    bindEvents();
+  }
+
+  function renderTopTabs(){
+    var slot = document.getElementById("mode-pill-slot");
+    if(!state.ui.ownerUnlocked){ slot.innerHTML = ""; return; }
+    var isOwner = state.ui.role === "owner";
+    slot.innerHTML =
+      '<div class="staff-switch">' +
+        '<button class="staff-btn" data-staff-role="customer" aria-pressed="' + (!isOwner) + '">Customer</button>' +
+        '<button class="staff-btn" data-staff-role="owner" aria-pressed="' + (isOwner) + '">🧑‍🍳 Owner</button>' +
+        '<button class="staff-btn lock" id="btn-lock-staff" title="Exit staff mode">🔒</button>' +
+      '</div>';
+  }
+
+  function renderPinPanel(){
+    if(!state.ui.showPin) return "";
+    return '<div class="modal-backdrop" id="pin-backdrop">' +
+      '<div class="modal-card">' +
+        '<h3>Shop staff sign-in</h3>' +
+        '<p class="sub">Enter the staff PIN to open the owner dashboard.</p>' +
+        '<input type="password" inputmode="numeric" id="pin-input" placeholder="••••" autocomplete="off" value="' + esc(state.ui.pinInput) + '">' +
+        (state.ui.pinError ? '<div class="err" style="text-align:center;margin-top:8px">' + esc(state.ui.pinError) + '</div>' : '') +
+        '<div style="display:flex;gap:8px;margin-top:14px">' +
+          '<button class="btn btn-owner" data-full id="btn-pin-submit">Unlock</button>' +
+          '<button class="btn btn-ghost" id="btn-pin-cancel">Cancel</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderRibbon(){
+    var cs = computeShopState();
+    var badge = badgeForStatus(cs), reason = "";
+    if(cs.state === "HOLIDAY"){
+      reason = 'Back ' + fmtDate(cs.until) + (cs.reason ? ' — ' + esc(cs.reason) : '');
+    } else if(cs.state === "CLOSED"){
+      reason = cs.reason ? esc(cs.reason) : "No reason given";
+    }
+    var ahead = activeOrdersAheadOf(Infinity);
+    var eta = computeEta(ahead);
+    var etaChip = cs.state === "OPEN" ? '<span class="eta-chip">⏱ ' + eta.min + '–' + eta.max + ' min wait</span>' : "";
+    var delivery = state.shop.deliveryEnabled ? '<span class="badge" style="background:var(--teal-soft);color:var(--teal)">🛵 Delivery on</span>' : '<span class="badge" style="background:var(--surface-2);color:var(--ink-soft)">🛵 Pickup only</span>';
+
+    document.getElementById("ribbon").innerHTML =
+      '<span class="shop-name">' + esc(state.shop.name) + '</span>' +
+      badge +
+      (reason ? '<span class="reason">' + reason + '</span>' : '') +
+      delivery +
+      '<span class="spacer"></span>' + etaChip;
+  }
+
+  /* ---------- Customer view ---------- */
+  function cartLines(){
+    return Object.keys(state.ui.cart).filter(function(id){ return state.ui.cart[id] > 0; }).map(function(id){
+      var item = state.menu.find(function(m){ return m.id === id; });
+      return item ? { item: item, qty: state.ui.cart[id] } : null;
+    }).filter(Boolean);
+  }
+  function cartTotal(lines){ return lines.reduce(function(s,l){ return s + l.item.price*l.qty; }, 0); }
+
+  function customerView(){
+    if(state.ui.customerStep === "hubs") return renderHubGrid();
+    if(state.ui.customerStep === "shop") return renderShopPage();
+    return renderWelcome();
+  }
+
+  function renderWelcome(){
+    function step(n,t,d){
+      return '<div class="step-card"><div class="num">' + n + '</div><div class="t">' + t + '</div><div class="d">' + d + '</div></div>';
+    }
+    return '<div class="welcome">' +
+      '<div class="welcome-mark">🫓</div>' +
+      '<h2 class="display">Welcome to DSK Food Hub</h2>' +
+      '<p class="welcome-sub">Order ahead from your community\'s food hubs, get a token, and pay when you collect — no app to install, no card needed.</p>' +
+      '<button class="btn btn-primary btn-lg" id="btn-enter-hubs">Browse food hubs →</button>' +
+      '<div class="welcome-steps">' +
+        step("1","Pick a hub","Choose from the food hubs and shops near you") +
+        step("2","Order &amp; get a token","Add items, choose pickup or home delivery") +
+        step("3","Pay at the hub","No online payment — settle up when you collect") +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderHubGrid(){
+    var cs = computeShopState();
+    var ahead = activeOrdersAheadOf(Infinity);
+    var eta = computeEta(ahead);
+    var special = state.menu.find(function(m){ return m.id === state.shop.todaySpecialId; });
+    var metaBits = [];
+    metaBits.push(cs.state === "OPEN" ? ("⏱ " + eta.min + "–" + eta.max + " min") : (cs.state === "HOLIDAY" ? "On leave" : "Closed"));
+    metaBits.push(state.shop.deliveryEnabled ? "Delivery available" : "Pickup only");
+
+    var html = '<button class="crumb" id="btn-to-welcome">← DSK Food Hub</button>';
+    html += '<h2 class="display" style="font-size:22px;margin-bottom:2px">Choose a food hub</h2>';
+    html += '<p class="sub" style="margin-bottom:6px">One hub live so far — more will appear here as they join.</p>';
+    html += '<div class="hub-grid">';
+    html += '<button class="hub-tile" data-open-hub="1">' +
+      '<div>' + badgeForStatus(cs) + '</div>' +
+      '<h3>' + esc(state.shop.name) + '</h3>' +
+      '<p class="local">' + esc(state.shop.local) + '</p>' +
+      '<div class="hub-tile-meta">' + metaBits.join(" · ") + '</div>' +
+      (special ? ('<div class="hub-tile-special">★ Today: ' + esc(special.name) + ' ' + money(special.price) + '</div>') : '') +
+      '<div class="hub-tile-cta">View menu →</div>' +
+      '</button>';
+    html += '<div class="hub-tile-ghost">More food hubs will show up here as your community adds them</div>';
+    html += '</div>';
+    return html;
+  }
+
+  function renderShopPage(){
+    var cs = computeShopState();
+    var openForOrders = cs.state === "OPEN";
+    var order = state.ui.activeOrderId ? state.orders.find(function(o){ return o.id === state.ui.activeOrderId; }) : null;
+
+    var html = '<button class="crumb" id="btn-to-hubs">← All food hubs</button>';
+    html += '<div class="grid2">';
+
+    html += '<div>';
+
+    if(order && order.status !== "COMPLETED" && order.status !== "REJECTED" && order.status !== "CANCELLED"){
+      html += renderTicket(order) ;
+    } else if(order){
+      html += renderTicket(order);
+      html += '<div style="margin-top:12px"><button class="btn btn-primary" id="btn-new-order">Place another order</button></div>';
+    }
+
+    html += '<div class="card accent-customer">';
+    html += '<h2 class="display">' + esc(state.shop.name) + '</h2>';
+    html += '<p class="sub">' + esc(state.shop.local) + '</p>';
+    if(!openForOrders){
+      html += '<div style="background:var(--surface-2);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13.5px;color:var(--ink-soft)">Menu is browsable, but ordering opens again once the hub reopens.</div>';
+    }
+    html += '<div class="section-title">Menu</div>';
+    state.menu.forEach(function(item){
+      var qty = state.ui.cart[item.id] || 0;
+      var isSpecial = item.id === state.shop.todaySpecialId;
+      html += '<div class="menu-row">';
+      html += '<div class="info"><span class="name">' + esc(item.name) + '</span>';
+      if(isSpecial) html += '<span class="special-flag">★ Special</span>';
+      if(!item.available) html += '<span class="unavailable-flag">Sold out</span>';
+      html += '<div class="local">' + esc(item.local) + '</div></div>';
+      html += '<div class="price">' + money(item.price) + '</div>';
+      if(!item.available || !openForOrders){
+        html += '<div style="width:96px"></div>';
+      } else if(qty === 0){
+        html += '<button class="add-btn" data-add="' + item.id + '">Add</button>';
+      } else {
+        html += '<div class="stepper"><button data-dec="' + item.id + '">−</button><span class="qty">' + qty + '</span><button data-inc="' + item.id + '">+</button></div>';
+      }
+      html += '</div>';
+    });
+    html += '</div>'; // card
+
+    html += '</div>'; // left col
+
+    html += '<div>' + renderCartPanel(openForOrders) + '</div>';
+    html += '</div>'; // grid2
+    return html;
+  }
+
+  function renderTicket(order){
+    var stages = ["PENDING","ACCEPTED","PREPARING","READY","COMPLETED"];
+    var idx = stages.indexOf(order.status);
+    var ahead = activeOrdersAheadOf(order.tokenSeq);
+    var eta = computeEta(ahead);
+    var terminal = order.status === "REJECTED" || order.status === "CANCELLED";
+
+    var html = '<div class="ticket" style="margin-bottom:16px">';
+    html += '<div class="ticket-stub"><div class="lbl">Your token</div><div class="code">' + esc(order.tokenDisplay) + '</div></div>';
+    html += '<div class="ticket-seam"></div>';
+    html += '<div class="ticket-body">';
+    html += '<div class="top-row"><div><h3>' + esc(state.shop.name) + '</h3><div class="hint" style="margin-top:2px">' + (order.fulfilment==="DELIVERY"?"🛵 Home delivery":"🚶 Pickup") + '</div></div>';
+    html += '<span class="status-pill st-' + order.status + '">' + order.status + '</span></div>';
+
+    if(!terminal){
+      html += '<div class="stepper-track">';
+      stages.forEach(function(s, i){ html += '<div class="seg ' + (i<idx?"done":(i===idx?"now":"")) + '"></div>'; });
+      html += '</div>';
+      html += '<div class="stepper-labels"><span>Placed</span><span>Accepted</span><span>Preparing</span><span>Ready</span><span>Done</span></div>';
+    } else {
+      html += '<div style="background:var(--red-soft);color:var(--red);border-radius:9px;padding:9px 12px;font-size:13px;margin:10px 0">' +
+        (order.status==="REJECTED" ? "Not accepted" : "Cancelled") + (order.rejectReason ? " — " + esc(order.rejectReason) : "") + '</div>';
+    }
+
+    if(order.status === "PENDING" || order.status === "ACCEPTED" || order.status === "PREPARING"){
+      html += '<div class="kv-row"><span class="k">Orders ahead</span><span class="v">' + ahead + '</span></div>';
+      html += '<div class="kv-row"><span class="k">Estimated wait</span><span class="v">' + eta.min + '–' + eta.max + ' min</span></div>';
+    }
+    if(order.status === "READY"){
+      html += '<div style="background:var(--green-soft);color:var(--green);border-radius:9px;padding:9px 12px;font-weight:700;font-size:13.5px;margin:8px 0">Ready — please ' + (order.fulfilment==="DELIVERY"?"expect your delivery now":"collect at the counter") + '</div>';
+    }
+    html += '<div class="kv-row"><span class="k">Amount due</span><span class="v">' + money(order.total) + ' · ' + (order.paymentStatus==="PAID" ? '<span class="paid-pill paid-PAID">Paid</span>' : '<span class="paid-pill paid-DUE">Pay at hub</span>') + '</span></div>';
+    html += '<div class="kv-row"><span class="k">Items</span><span class="v" style="text-align:right;font-weight:600">' + order.items.map(function(l){ return l.qty+'× '+esc(l.name); }).join(', ') + '</span></div>';
+
+    var shopWa = waLink(state.shop.ownerWhatsapp, orderSummaryText(order));
+    if(order.status === "PENDING"){
+      if(shopWa){
+        html += '<a class="btn btn-primary" data-full href="' + shopWa + '" target="_blank" rel="noopener" style="margin-top:14px;text-decoration:none">📲 Send order to shop on WhatsApp</a>';
+      } else {
+        html += '<div class="hint" style="margin-top:12px">The shop hasn\'t added a WhatsApp number yet, so this can\'t be sent automatically — ask them to add one under Owner → Contact.</div>';
+      }
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderCartPanel(openForOrders){
+    var lines = cartLines();
+    var total = cartTotal(lines);
+    var u = state.ui;
+    var deliveryOn = state.shop.deliveryEnabled;
+
+    var html = '<div class="card accent-customer">';
+    html += '<h2>Your order</h2>';
+    if(lines.length === 0){
+      html += '<div class="empty-note">Add items from the menu to start an order.</div>';
+    } else {
+      lines.forEach(function(l){
+        html += '<div class="cart-line"><span>' + l.qty + '× ' + esc(l.item.name) + '</span><span style="display:flex;align-items:center;gap:8px"><span class="mono">' + money(l.item.price*l.qty) + '</span><button class="x" data-remove="' + l.item.id + '">✕</button></span></div>';
+      });
+      html += '<div class="cart-total"><span>Total</span><span class="mono">' + money(total) + '</span></div>';
+
+      html += '<div style="margin-top:16px">';
+      html += '<div class="fulfil-toggle">';
+      html += '<button data-fulfil="PICKUP" aria-pressed="' + (u.fulfilment==="PICKUP") + '">🚶 Pickup<small>ready at counter</small></button>';
+      html += '<button data-fulfil="DELIVERY" aria-pressed="' + (u.fulfilment==="DELIVERY") + '" ' + (deliveryOn?'':'disabled') + '>🛵 Delivery<small>' + (deliveryOn?'to your address':'currently off') + '</small></button>';
+      html += '</div>';
+
+      html += '<div class="field"><label>Your name</label><input type="text" id="in-name" value="' + esc(u.name) + '" placeholder="e.g. Asha Kulkarni"></div>';
+      html += '<div class="field"><label>Mobile number</label><input type="tel" id="in-phone" value="' + esc(u.phone) + '" placeholder="10-digit mobile"></div>';
+      if(u.fulfilment === "DELIVERY"){
+        html += '<div class="field"><label>Delivery address</label><textarea id="in-address" placeholder="Flat / building, street, landmark">' + esc(u.address) + '</textarea></div>';
+      }
+      html += '<div class="field"><label>Notes (optional)</label><input type="text" id="in-notes" value="' + esc(u.notes) + '" placeholder="e.g. less spicy, no ghee"></div>';
+      html += '<div id="cart-err" class="err" style="display:none"></div>';
+      html += '<button class="btn btn-primary" data-full id="btn-place" ' + (openForOrders?'':'disabled') + '>Place order — pay at hub</button>';
+      if(!openForOrders) html += '<div class="hint" style="margin-top:8px;text-align:center">Ordering opens once the hub is open.</div>';
+      html += '<div class="hint" style="margin-top:8px;text-align:center">No online payment — settle ' + money(total) + ' at the hub.</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+
+    // order history for this browser
+    var mine = todaysAndPastOrders();
+    if(mine.length){
+      html += '<div class="card">';
+      html += '<div class="section-title">Orders from this device</div>';
+      mine.slice(0,6).forEach(function(o){
+        html += '<div class="kv-row"><span class="k">' + esc(o.tokenDisplay) + ' · ' + fmtDate(o.serviceDate) + '</span><span class="v"><span class="status-pill st-' + o.status + '" style="font-size:10px">' + o.status + '</span></span></div>';
+      });
+      html += '</div>';
+    }
+    return html;
+  }
+  function todaysAndPastOrders(){
+    return state.orders.slice().sort(function(a,b){ return b.createdAt - a.createdAt; });
+  }
+
+  /* ---------- Owner view ---------- */
+  function ownerView(){
+    var today = todaysOrders();
+    var completed = today.filter(function(o){ return o.status === "COMPLETED"; });
+    var sales = completed.reduce(function(s,o){ return s + o.total; }, 0);
+    var active = today.filter(function(o){ return ACTIVE_STATUSES.indexOf(o.status) !== -1; }).length;
+    var cs = computeShopState();
+
+    var html = '<div class="stat-grid" style="margin-top:18px">';
+    html += statTile(money(sales), "Sales today");
+    html += statTile(today.length, "Orders today");
+    html += statTile(active, "Active tokens");
+    html += statTile(state.shop.avgPrepMinutes + " min", "Avg prep");
+    html += '</div>';
+
+    html += '<div class="grid2">';
+    html += '<div>';
+
+    // Owner to take action — open orders first, closed ones sink to the bottom
+    html += '<div class="card accent-owner">';
+    html += '<h2>Owner to take action</h2><p class="sub">Today\'s live order queue · ' + fmtDate(todayStr()) + '</p>';
+    var isOpenOrder = function(o){ return o.status !== "COMPLETED" && o.status !== "REJECTED" && o.status !== "CANCELLED"; };
+    var openOrders = today.filter(isOpenOrder).sort(function(a,b){ return a.tokenSeq - b.tokenSeq; });
+    var closedOrders = today.filter(function(o){ return !isOpenOrder(o); }).sort(function(a,b){ return b.updatedAt - a.updatedAt; });
+    if(openOrders.length === 0 && closedOrders.length === 0){
+      html += '<div class="empty-state"><div class="big">🧺</div>No orders yet today.</div>';
+    } else {
+      if(openOrders.length === 0) html += '<div class="hint" style="margin-bottom:10px">Nothing waiting on you right now.</div>';
+      openOrders.forEach(function(o){ html += renderQueueRow(o); });
+      if(closedOrders.length){
+        html += '<div class="section-title" style="margin-top:16px">Closed out today</div>';
+        closedOrders.forEach(function(o){ html += renderQueueRow(o); });
+      }
+    }
+    html += '</div>';
+
+    // Daily sales log
+    html += '<div class="card accent-owner">';
+    html += '<h2>Daily sales log</h2><p class="sub">Every order today, oldest first — for reconciling the till.</p>';
+    if(today.length === 0){
+      html += '<div class="empty-state"><div class="big">📋</div>Nothing logged yet today.</div>';
+    } else {
+      var logSorted = today.slice().sort(function(a,b){ return a.tokenSeq - b.tokenSeq; });
+      logSorted.forEach(function(o){
+        html += '<div class="kv-row"><span class="k">' + esc(o.tokenDisplay) + ' · ' +
+          new Date(o.createdAt).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}) + ' · ' + esc(o.name) +
+          ' <span class="hint">(' + (o.fulfilment==="DELIVERY"?"delivery":"pickup") + ')</span></span>' +
+          '<span class="v">' + money(o.total) + ' <span class="status-pill st-' + o.status + '" style="font-size:9.5px;margin-left:4px">' + o.status + '</span></span></div>';
+      });
+    }
+    var waSummary = waLink(state.shop.ownerWhatsapp, dailySummaryText());
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">';
+    if(waSummary){
+      html += '<a class="btn btn-owner btn-sm" href="' + waSummary + '" target="_blank" rel="noopener" style="text-decoration:none">📲 Send summary to WhatsApp</a>';
+    } else {
+      html += '<span class="hint">Add a shop WhatsApp number under Contact to send this summary.</span>';
+    }
+    html += '<button class="btn btn-sm" id="btn-export-csv">⬇️ Download as Excel (CSV)</button>';
+    html += '</div>';
+    html += '<p class="hint" style="margin-top:8px">WhatsApp sends the summary as text you tap to send — it can\'t attach the CSV automatically. Download the file here, then attach it to the WhatsApp chat yourself if you want the spreadsheet sent too.</p>';
+    html += '</div>';
+
+    html += '</div>'; // left col
+
+    html += '<div>';
+
+    // Today's emergency override
+    html += '<div class="card accent-owner">';
+    html += '<h2>Today\'s status</h2>';
+    html += '<p class="sub">For an unplanned closure right now — everything below this handles the regular schedule.</p>';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">';
+    html += '<div><strong>' + (state.shop.isOpenManual ? "Open for orders" : "Closed") + '</strong></div>';
+    html += '<label class="switch"><input type="checkbox" id="tg-open" ' + (state.shop.isOpenManual?'checked':'') + '><span class="track"></span></label>';
+    html += '</div>';
+    if(!state.shop.isOpenManual){
+      html += '<div class="field" style="margin-top:10px"><label>Reason customers will see</label><textarea id="in-closure-reason" placeholder="e.g. Gas cylinder over, back by 5pm">' + esc(state.shop.closureReason) + '</textarea></div>';
+      html += '<button class="btn btn-owner btn-sm" id="btn-save-closure">Save reason</button>';
+    }
+    html += '</div>';
+
+    // Shop timings
+    html += '<div class="card accent-owner">';
+    html += '<h2>Shop timings</h2>';
+    html += '<p class="sub">Outside these hours, customers see the hub as closed automatically.</p>';
+    html += '<div class="field-row">';
+    html += '<div class="field"><label>Opens</label><input type="time" id="in-open-time" value="' + esc(state.shop.openTime) + '"></div>';
+    html += '<div class="field"><label>Closes</label><input type="time" id="in-close-time" value="' + esc(state.shop.closeTime) + '"></div>';
+    html += '</div>';
+    html += '</div>';
+
+    // Weekly holiday
+    html += '<div class="card accent-owner">';
+    html += '<h2>Weekly holiday</h2>';
+    html += '<p class="sub">Pick any days the hub is always closed, every week.</p>';
+    html += '<div class="chip-row">';
+    WEEKDAY_SHORT.forEach(function(name, idx){
+      var on = (state.shop.weeklyHolidays||[]).indexOf(idx) !== -1;
+      html += '<button type="button" class="chip" data-weekday="' + idx + '" aria-pressed="' + on + '">' + name + '</button>';
+    });
+    html += '</div></div>';
+
+    // Any other holidays
+    html += '<div class="card accent-owner">';
+    html += '<h2>Any other holidays</h2>';
+    html += '<p class="sub">A one-off date range — a festival, a trip. This overrides everything else while it lasts.</p>';
+    html += '<div class="field-row">';
+    html += '<div class="field"><label>From</label><input type="date" id="in-hol-from" value="' + esc(state.shop.holidayFrom) + '"></div>';
+    html += '<div class="field"><label>To</label><input type="date" id="in-hol-to" value="' + esc(state.shop.holidayTo) + '"></div>';
+    html += '</div>';
+    html += '<div class="field"><label>Reason (shown to customers)</label><textarea id="in-hol-reason" placeholder="e.g. Family wedding, back next Monday">' + esc(state.shop.holidayReason) + '</textarea></div>';
+    html += '<div style="display:flex;gap:8px">';
+    html += '<button class="btn btn-owner btn-sm" id="btn-save-holiday">Save holiday</button>';
+    if(state.shop.holidayFrom || state.shop.holidayTo){
+      html += '<button class="btn btn-sm" id="btn-clear-holiday">Clear holiday</button>';
+    }
+    html += '</div>';
+    if(cs.state === "HOLIDAY") html += '<div class="hint" style="margin-top:8px">Currently showing to customers as <strong>on leave</strong> until ' + fmtDate(cs.until) + '.</div>';
+    html += '</div>';
+
+    // Home delivery
+    html += '<div class="card accent-owner">';
+    html += '<h2>Home Delivery ?</h2>';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between">';
+    html += '<div><strong>Home delivery</strong><div class="hint">Let customers request delivery, not just pickup.</div></div>';
+    html += '<label class="switch"><input type="checkbox" id="tg-delivery" ' + (state.shop.deliveryEnabled?'checked':'') + '><span class="track"></span></label>';
+    html += '</div></div>';
+
+    // Contact / WhatsApp
+    html += '<div class="card accent-owner">';
+    html += '<h2>Contact</h2>';
+    html += '<p class="sub">Customers tap a button to send new-order details straight to this number on WhatsApp. You message customers back the same way from each order in the queue — nothing sends automatically.</p>';
+    html += '<div class="field"><label>Shop WhatsApp number</label><input type="tel" id="in-owner-whatsapp" value="' + esc(state.shop.ownerWhatsapp) + '" placeholder="10-digit mobile number"></div>';
+    html += '<hr style="border:none;border-top:1px solid var(--line);margin:16px 0">';
+    html += '<div class="field"><label>Staff sign-in PIN</label><input type="text" inputmode="numeric" id="in-staff-pin" value="' + esc(state.shop.staffPin) + '" placeholder="e.g. 1234"></div>';
+    html += '<p class="hint" style="margin-bottom:10px">Whoever runs the counter uses this PIN behind the "Shop staff sign-in" link at the bottom of the customer app — change it from the default.</p>';
+    html += '<button class="btn btn-ghost btn-sm" id="btn-lock-now" style="color:var(--red)">🔒 Lock owner view on this device</button>';
+    html += '</div>';
+
+    // Today's special
+    html += '<div class="card accent-owner">';
+    html += '<h2>Today\'s special</h2>';
+    html += '<select id="sel-special">';
+    html += '<option value="">— none —</option>';
+    state.menu.forEach(function(m){ html += '<option value="' + m.id + '" ' + (m.id===state.shop.todaySpecialId?'selected':'') + '>' + esc(m.name) + '</option>'; });
+    html += '</select></div>';
+
+    // Menu editor
+    html += '<div class="card accent-owner">';
+    html += '<h2>Menu</h2><p class="sub">Prices and availability, live for customers.</p>';
+    state.menu.forEach(function(m){
+      html += '<div class="menu-edit-row">';
+      html += '<div><div class="nm">' + esc(m.name) + '</div><div class="lc">' + esc(m.local) + '</div></div>';
+      html += '<input type="number" min="0" step="5" class="mono" data-price="' + m.id + '" value="' + m.price + '">';
+      html += '<label class="switch" title="Available"><input type="checkbox" data-avail="' + m.id + '" ' + (m.available?'checked':'') + '><span class="track"></span></label>';
+      html += '<span class="hint">' + (m.available?'available':'sold out') + '</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+
+    html += '<div class="card" style="text-align:center">';
+    if(!state.ui.resetArm){
+      html += '<button class="btn btn-ghost btn-sm" id="btn-reset-arm" style="color:var(--red)">Reset demo data</button>';
+    } else {
+      html += '<span class="hint">Erase all orders, tokens and settings on this device?</span><br><br>';
+      html += '<button class="btn btn-danger btn-sm" id="btn-reset-go">Yes, reset everything</button> ';
+      html += '<button class="btn btn-ghost btn-sm" id="btn-reset-cancel">Cancel</button>';
+    }
+    html += '</div>';
+
+    html += '</div>'; // right col
+    html += '</div>'; // grid2
+    return html;
+  }
+
+  function statTile(num, lbl){
+    return '<div class="stat-tile"><div class="num">' + num + '</div><div class="lbl">' + lbl + '</div></div>';
+  }
+
+  var REASON_CHIPS = ["Item unavailable","Shop closing","At capacity","Other"];
+  function renderQueueRow(o){
+    var html = '<div class="queue-row qr-' + o.status + '">';
+    html += '<div class="queue-token">' + esc(o.tokenDisplay) + '</div>';
+    html += '<div class="queue-who"><div class="nm">' + esc(o.name) + '</div><div class="ph">' + esc(o.phone) + '</div></div>';
+    html += '<div class="queue-items"><span class="fulfil-icon">' + (o.fulfilment==="DELIVERY"?"🛵":"🚶") + '</span> ' + o.items.map(function(l){ return l.qty+'×'+esc(l.name); }).join(", ") + (o.notes ? ' — "' + esc(o.notes) + '"' : '') + '</div>';
+    html += '<div class="queue-amt">' + money(o.total) + '</div>';
+    html += '<span class="status-pill st-' + o.status + '">' + o.status + '</span>';
+    if(o.status==="READY" || o.status==="COMPLETED"){
+      html += '<span class="paid-pill paid-' + o.paymentStatus + '">' + (o.paymentStatus==="PAID"?"Paid":"Due") + '</span>';
+    }
+
+    html += '<div class="queue-actions">';
+    var custWa = waLink(o.phone, statusUpdateText(o));
+    if(custWa && o.status !== "PENDING"){
+      html += '<a class="btn btn-sm btn-ghost" href="' + custWa + '" target="_blank" rel="noopener" title="Message ' + esc(o.name) + ' on WhatsApp" style="text-decoration:none">📲 Notify</a>';
+    }
+    if(o.status === "PENDING"){
+      html += '<button class="btn btn-owner btn-sm" data-accept="' + o.id + '">Accept</button>';
+      html += '<button class="btn btn-danger btn-sm" data-reject="' + o.id + '">Reject</button>';
+    } else if(o.status === "ACCEPTED"){
+      html += '<button class="btn btn-owner btn-sm" data-prepare="' + o.id + '">Start preparing</button>';
+    } else if(o.status === "PREPARING"){
+      html += '<button class="btn btn-owner btn-sm" data-ready="' + o.id + '">Mark ready</button>';
+    } else if(o.status === "READY"){
+      if(o.paymentStatus !== "PAID") html += '<button class="btn btn-sm" data-paid="' + o.id + '">Mark paid</button>';
+      html += '<button class="btn btn-owner btn-sm" data-complete="' + o.id + '">Complete</button>';
+    }
+    html += '</div>';
+
+    if(state.ui.rejecting === o.id){
+      html += '<div class="reject-panel"><div class="hint">Reason (shown to the customer)</div><div class="chip-row" id="reject-chips">';
+      REASON_CHIPS.forEach(function(c){ html += '<button type="button" class="chip" data-reason-chip="' + esc(c) + '">' + c + '</button>'; });
+      html += '</div><div class="row"><input type="text" id="reject-reason-text" placeholder="Reason..." style="flex:1;min-width:160px">';
+      html += '<button class="btn btn-danger btn-sm" data-confirm-reject="' + o.id + '">Confirm reject</button>';
+      html += '<button class="btn btn-ghost btn-sm" data-cancel-reject="1">Cancel</button></div></div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  /* ============ Events ============ */
+  function bindEvents(){
+    var app = document.getElementById("app");
+
+    app.addEventListener("click", onAppClick);
+    app.addEventListener("change", onAppChange);
+    app.addEventListener("input", onAppInput);
+    app.addEventListener("keydown", onAppKeydown);
+  }
+
+  function onAppKeydown(e){
+    if(e.key === "Enter" && e.target.id === "pin-input"){ submitPin(); }
+  }
+
+  function q(el, sel){ return el.closest ? el.closest(sel) : null; }
+
+  function onAppClick(e){
+    var t = e.target;
+    var id;
+
+    if(t.id === "pin-backdrop"){ state.ui.showPin = false; persist(); render(); return; }
+    if(t.id === "btn-pin-cancel"){ state.ui.showPin = false; persist(); render(); return; }
+    if(t.id === "btn-pin-submit"){ submitPin(); return; }
+
+    if(t.id === "btn-enter-hubs"){ state.ui.customerStep = "hubs"; persist(); render(); return; }
+    if(t.id === "btn-to-welcome"){ state.ui.customerStep = "welcome"; persist(); render(); return; }
+    if(t.id === "btn-to-hubs"){ state.ui.customerStep = "hubs"; persist(); render(); return; }
+    if(attr(t,"data-open-hub")){ state.ui.customerStep = "shop"; persist(); render(); return; }
+
+    if((id = attr(t,"data-add"))){ state.ui.cart[id] = (state.ui.cart[id]||0)+1; persist(); render(); return; }
+    if((id = attr(t,"data-inc"))){ state.ui.cart[id] = (state.ui.cart[id]||0)+1; persist(); render(); return; }
+    if((id = attr(t,"data-dec"))){ state.ui.cart[id] = Math.max(0,(state.ui.cart[id]||0)-1); persist(); render(); return; }
+    if((id = attr(t,"data-remove"))){ delete state.ui.cart[id]; persist(); render(); return; }
+
+    var f;
+    if((f = attr(t,"data-fulfil"))){ state.ui.fulfilment = f; persist(); render(); return; }
+
+    if(t.id === "btn-place" || attr(t,"btn-place")){ placeOrder(); return; }
+    if(t.id === "btn-new-order"){ state.ui.activeOrderId = null; state.ui.cart={}; persist(); render(); return; }
+
+    if((id = attr(t,"data-accept"))){ setOrderStatus(id,"ACCEPTED"); return; }
+    if((id = attr(t,"data-prepare"))){ setOrderStatus(id,"PREPARING"); return; }
+    if((id = attr(t,"data-ready"))){ setOrderStatus(id,"READY"); return; }
+    if((id = attr(t,"data-complete"))){ setOrderStatus(id,"COMPLETED"); return; }
+    if((id = attr(t,"data-paid"))){ markPaid(id); return; }
+    if((id = attr(t,"data-reject"))){ state.ui.rejecting = id; render(); return; }
+    if(t.id === "btn-cancel-reject" || attr(t,"data-cancel-reject")){ state.ui.rejecting = null; render(); return; }
+    if((id = attr(t,"data-confirm-reject"))){
+      var txt = document.getElementById("reject-reason-text");
+      confirmReject(id, txt ? txt.value.trim() : "");
+      return;
+    }
+    var chip;
+    if((chip = attr(t,"data-reason-chip"))){
+      var box = document.getElementById("reject-reason-text");
+      if(box){ box.value = chip === "Other" ? "" : chip; box.focus(); }
+      return;
+    }
+
+    if(t.id === "btn-save-closure"){
+      state.shop.closureReason = document.getElementById("in-closure-reason").value.trim();
+      persist(); render(); toast("Closure reason saved"); return;
+    }
+    if(t.id === "btn-save-holiday"){
+      var from = document.getElementById("in-hol-from").value;
+      var to = document.getElementById("in-hol-to").value;
+      var reason = document.getElementById("in-hol-reason").value.trim();
+      if(from && to && from > to){ toast("Start date must be before end date"); return; }
+      state.shop.holidayFrom = from; state.shop.holidayTo = to; state.shop.holidayReason = reason;
+      persist(); render(); toast("Holiday saved"); return;
+    }
+    if(t.id === "btn-clear-holiday"){
+      state.shop.holidayFrom = ""; state.shop.holidayTo = ""; state.shop.holidayReason = "";
+      persist(); render(); toast("Holiday cleared"); return;
+    }
+    var wd = attr(t,"data-weekday");
+    if(wd !== null){
+      wd = +wd;
+      var wh = (state.shop.weeklyHolidays||[]).slice();
+      var pos = wh.indexOf(wd);
+      if(pos === -1) wh.push(wd); else wh.splice(pos,1);
+      state.shop.weeklyHolidays = wh;
+      persist(); render(); return;
+    }
+    if(t.id === "btn-export-csv"){ exportOrdersCsv(); return; }
+
+    if(t.id === "btn-lock-now"){
+      state.ui.ownerUnlocked = false; state.ui.role = "customer"; state.ui.customerStep = "welcome";
+      persist(); render(); toast("Owner view locked"); return;
+    }
+    if(t.id === "btn-reset-arm"){ state.ui.resetArm = true; render(); return; }
+    if(t.id === "btn-reset-cancel"){ state.ui.resetArm = false; render(); return; }
+    if(t.id === "btn-reset-go"){
+      state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+      state.ui.role = "owner"; state.ui.ownerUnlocked = true;
+      persist(); render(); toast("Demo data reset"); return;
+    }
+  }
+  function attr(el, name){
+    var n = el.closest ? el.closest("[" + name + "]") : null;
+    return n ? n.getAttribute(name) : null;
+  }
+
+  function onAppChange(e){
+    var t = e.target;
+    if(t.id === "tg-open"){ state.shop.isOpenManual = t.checked; persist(); render(); toast(t.checked?"Hub marked open":"Hub marked closed"); return; }
+    if(t.id === "tg-delivery"){ state.shop.deliveryEnabled = t.checked; if(!t.checked && state.ui.fulfilment==="DELIVERY") state.ui.fulfilment="PICKUP"; persist(); render(); toast(t.checked?"Home delivery enabled":"Home delivery disabled"); return; }
+    if(t.id === "sel-special"){ state.shop.todaySpecialId = t.value; persist(); render(); return; }
+    if(t.id === "in-open-time"){ state.shop.openTime = t.value; persist(); render(); return; }
+    if(t.id === "in-close-time"){ state.shop.closeTime = t.value; persist(); render(); return; }
+    var id;
+    if((id = attr(t,"data-price"))){
+      var item = state.menu.find(function(m){ return m.id===id; });
+      if(item){ item.price = Math.max(0, parseInt(t.value,10) || 0); persist(); }
+      return;
+    }
+    if((id = attr(t,"data-avail"))){
+      var it2 = state.menu.find(function(m){ return m.id===id; });
+      if(it2){ it2.available = t.checked; persist(); render(); }
+      return;
+    }
+  }
+
+  function onAppInput(e){
+    var t = e.target;
+    if(t.id === "in-name"){ state.ui.name = t.value; persist(); }
+    else if(t.id === "in-phone"){ state.ui.phone = t.value; persist(); }
+    else if(t.id === "in-address"){ state.ui.address = t.value; persist(); }
+    else if(t.id === "in-notes"){ state.ui.notes = t.value; persist(); }
+    else if(t.id === "in-owner-whatsapp"){ state.shop.ownerWhatsapp = t.value; persist(); }
+    else if(t.id === "in-staff-pin"){ state.shop.staffPin = t.value; persist(); }
+    else if(t.id === "pin-input"){ state.ui.pinInput = t.value; state.ui.pinError = ""; persist(); }
+  }
+
+  function placeOrder(){
+    var lines = cartLines();
+    var errBox = document.getElementById("cart-err");
+    function showErr(msg){ if(errBox){ errBox.style.display="block"; errBox.textContent = msg; } }
+    if(lines.length === 0) return;
+    var name = (state.ui.name||"").trim();
+    var phone = (state.ui.phone||"").trim();
+    if(!name){ showErr("Please enter your name."); return; }
+    if(!/^\d{10}$/.test(phone.replace(/\D/g,""))){ showErr("Please enter a valid 10-digit mobile number."); return; }
+    var address = (state.ui.address||"").trim();
+    if(state.ui.fulfilment === "DELIVERY" && !address){ showErr("Please enter a delivery address."); return; }
+
+    var seq = allocateToken();
+    var order = {
+      id: uid(),
+      tokenSeq: seq,
+      tokenDisplay: tokenDisplay(seq),
+      serviceDate: todayStr(),
+      name: name, phone: phone,
+      fulfilment: state.ui.fulfilment,
+      address: state.ui.fulfilment==="DELIVERY" ? address : "",
+      items: lines.map(function(l){ return { name:l.item.name, price:l.item.price, qty:l.qty }; }),
+      total: cartTotal(lines),
+      notes: (state.ui.notes||"").trim(),
+      status: "PENDING",
+      paymentStatus: "DUE",
+      rejectReason: "",
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    state.orders.push(order);
+    state.ui.cart = {};
+    state.ui.notes = "";
+    state.ui.activeOrderId = order.id;
+    persist();
+    render();
+    toast("Order placed — token " + order.tokenDisplay);
+  }
+
+  function setOrderStatus(id, status){
+    var o = state.orders.find(function(x){ return x.id===id; });
+    if(!o) return;
+    o.status = status; o.updatedAt = Date.now();
+    persist(); render();
+    toast(o.tokenDisplay + " → " + status.charAt(0)+status.slice(1).toLowerCase());
+  }
+  function markPaid(id){
+    var o = state.orders.find(function(x){ return x.id===id; });
+    if(!o) return;
+    o.paymentStatus = "PAID"; o.updatedAt = Date.now();
+    persist(); render(); toast(o.tokenDisplay + " marked paid");
+  }
+  function confirmReject(id, reason){
+    var o = state.orders.find(function(x){ return x.id===id; });
+    if(!o) return;
+    o.status = "REJECTED"; o.rejectReason = reason || "Not specified"; o.updatedAt = Date.now();
+    state.ui.rejecting = null;
+    persist(); render(); toast(o.tokenDisplay + " rejected");
+  }
+
+  function submitPin(){
+    var entered = (state.ui.pinInput||"").trim();
+    var expected = (state.shop.staffPin||"1234").trim();
+    if(entered && entered === expected){
+      state.ui.ownerUnlocked = true;
+      state.ui.role = "owner";
+      state.ui.showPin = false;
+      state.ui.pinInput = "";
+      state.ui.pinError = "";
+      persist(); render(); toast("Owner dashboard unlocked");
+    } else {
+      state.ui.pinError = "Incorrect PIN — try again.";
+      persist(); render();
+      var el = document.getElementById("pin-input");
+      if(el) el.focus();
+    }
+  }
+
+  /* ============ Portal access ============
+     The owner dashboard is reached only through the "Shop staff sign-in" link
+     in the footer, gated by a PIN (set in Owner → Contact, default 1234).
+     Customers on the plain link never see any control that leads there. */
+  document.getElementById("btn-open-staff").addEventListener("click", function(){
+    state.ui.showPin = true; state.ui.pinError = ""; state.ui.pinInput = "";
+    persist(); render();
+    setTimeout(function(){ var el = document.getElementById("pin-input"); if(el) el.focus(); }, 30);
+  });
+  document.getElementById("mode-pill-slot").addEventListener("click", function(e){
+    var t = e.target;
+    var r = attr(t,"data-staff-role");
+    if(r){ state.ui.role = r; persist(); render(); return; }
+    if(t.id === "btn-lock-staff" || attr(t,"data-lock-staff")){
+      state.ui.ownerUnlocked = false; state.ui.role = "customer"; state.ui.customerStep = "welcome";
+      persist(); render(); toast("Owner view locked");
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
