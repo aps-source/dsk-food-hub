@@ -526,8 +526,10 @@
       todaySpecialId: "puranpoli",
       ownerWhatsapp: "",
       staffPin: "1234",
-      openTime: "09:00",
-      closeTime: "21:00",
+      openTime1: "09:00",
+      closeTime1: "13:00",
+      openTime2: "17:00",
+      closeTime2: "21:00",
       weeklyHolidays: [],
       voiceAnnounce: true
     },
@@ -595,6 +597,35 @@
   var WEEKDAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
   var WEEKDAY_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
+  // A shop can run one shift or two (e.g. morning + evening with an afternoon break).
+  // Returns the configured windows as ["HH:MM","HH:MM"] pairs, in order, skipping any
+  // half that hasn't been set.
+  function shopHourWindows(shop){
+    var windows = [];
+    if(shop.openTime1 && shop.closeTime1) windows.push([shop.openTime1, shop.closeTime1]);
+    if(shop.openTime2 && shop.closeTime2) windows.push([shop.openTime2, shop.closeTime2]);
+    return windows;
+  }
+  function shopHoursStatus(shop, hhmm){
+    var windows = shopHourWindows(shop);
+    if(windows.length === 0) return { open: true };
+    for(var i=0; i<windows.length; i++){
+      if(hhmm >= windows[i][0] && hhmm <= windows[i][1]) return { open: true };
+    }
+    var nextToday = null;
+    for(var j=0; j<windows.length; j++){
+      if(hhmm < windows[j][0] && (nextToday === null || windows[j][0] < nextToday)) nextToday = windows[j][0];
+    }
+    if(nextToday !== null){
+      var beforeEverything = hhmm < windows[0][0];
+      return { open:false, reason: (beforeEverything ? "Opens today at " : "On a break — opens again at ") + formatTime12(nextToday) };
+    }
+    return { open:false, reason: "Closed for the day — opens tomorrow at " + formatTime12(windows[0][0]) };
+  }
+  function formatShopHours(shop){
+    return shopHourWindows(shop).map(function(w){ return formatTime12(w[0]) + "–" + formatTime12(w[1]); }).join(", ");
+  }
+
   // Precedence, matching how a real hub's status is decided:
   // holiday dates > manual emergency closure > weekly off day > opening hours > open.
   function computeShopState(){
@@ -610,15 +641,9 @@
     if((shop.weeklyHolidays||[]).indexOf(dow) !== -1){
       return { state:"CLOSED", reason: "Weekly off (" + WEEKDAY_NAMES[dow] + ")" };
     }
-    if(shop.openTime && shop.closeTime){
-      var hhmm = String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0");
-      if(hhmm < shop.openTime){
-        return { state:"CLOSED", reason: "Opens today at " + shop.openTime };
-      }
-      if(hhmm > shop.closeTime){
-        return { state:"CLOSED", reason: "Closed for the day — opens tomorrow at " + shop.openTime };
-      }
-    }
+    var hhmm = String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0");
+    var hours = shopHoursStatus(shop, hhmm);
+    if(!hours.open) return { state:"CLOSED", reason: hours.reason };
     return { state:"OPEN" };
   }
 
@@ -956,9 +981,8 @@
     metaBits.push(state.shop.deliveryEnabled ? "Delivery available" : "Pickup only");
 
     var timingsBits = [];
-    if(state.shop.openTime && state.shop.closeTime){
-      timingsBits.push("🕒 " + formatTime12(state.shop.openTime) + " – " + formatTime12(state.shop.closeTime));
-    }
+    var hoursText = formatShopHours(state.shop);
+    if(hoursText) timingsBits.push("🕒 " + hoursText);
     var weeklyOff = (state.shop.weeklyHolidays||[]).slice().sort();
     if(weeklyOff.length){
       timingsBits.push("Closed " + weeklyOff.map(function(d){ return WEEKDAY_SHORT[d]; }).join("/"));
@@ -1313,10 +1337,19 @@
     html += '<div class="card accent-owner">';
     html += '<h2>Shop timings</h2>';
     html += '<p class="sub">Outside these hours, customers see the hub as closed automatically.</p>';
+    html += '<div class="section-title" style="margin-top:0">First half</div>';
     html += '<div class="field-row">';
-    html += '<div class="field"><label>Opens</label><input type="time" id="in-open-time" value="' + esc(state.shop.openTime) + '"></div>';
-    html += '<div class="field"><label>Closes</label><input type="time" id="in-close-time" value="' + esc(state.shop.closeTime) + '"></div>';
+    html += '<div class="field"><label>Opens</label><input type="time" id="in-open-time-1" value="' + esc(state.shop.openTime1) + '"></div>';
+    html += '<div class="field"><label>Closes</label><input type="time" id="in-close-time-1" value="' + esc(state.shop.closeTime1) + '"></div>';
     html += '</div>';
+    html += '<div class="section-title">Second half <span class="hint" style="text-transform:none;letter-spacing:0;font-weight:400">(optional — leave both blank for a single shift)</span></div>';
+    html += '<div class="field-row">';
+    html += '<div class="field"><label>Opens</label><input type="time" id="in-open-time-2" value="' + esc(state.shop.openTime2) + '"></div>';
+    html += '<div class="field"><label>Closes</label><input type="time" id="in-close-time-2" value="' + esc(state.shop.closeTime2) + '"></div>';
+    html += '</div>';
+    html += '<hr style="border:none;border-top:1px solid var(--line);margin:16px 0">';
+    html += '<div class="field"><label>Average preparation time (minutes)</label><input type="number" min="1" step="1" id="in-avg-prep" value="' + esc(state.shop.avgPrepMinutes) + '"></div>';
+    html += '<p class="hint">Used to estimate how long customers wait for their token.</p>';
     html += '</div>';
 
     // Weekly holiday
@@ -1612,8 +1645,15 @@
       return;
     }
     if(t.id === "sel-special"){ updateShop({ todaySpecialId: t.value }); return; }
-    if(t.id === "in-open-time"){ updateShop({ openTime: t.value }); return; }
-    if(t.id === "in-close-time"){ updateShop({ closeTime: t.value }); return; }
+    if(t.id === "in-open-time-1"){ updateShop({ openTime1: t.value }); return; }
+    if(t.id === "in-close-time-1"){ updateShop({ closeTime1: t.value }); return; }
+    if(t.id === "in-open-time-2"){ updateShop({ openTime2: t.value }); return; }
+    if(t.id === "in-close-time-2"){ updateShop({ closeTime2: t.value }); return; }
+    if(t.id === "in-avg-prep"){
+      var prepVal = parseInt(t.value,10);
+      updateShop({ avgPrepMinutes: (isNaN(prepVal) || prepVal < 1) ? 8 : prepVal });
+      return;
+    }
     // Free-text shop fields sync on blur (change), not every keystroke — avoids a cloud
     // echo mid-typing rebuilding the input and yanking the cursor away.
     if(t.id === "in-owner-whatsapp"){ if(cloud.enabled) cloud.db.ref("shop").update({ ownerWhatsapp: t.value }); return; }
