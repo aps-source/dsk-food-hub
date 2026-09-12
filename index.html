@@ -332,6 +332,13 @@
     width:180px; height:180px; display:block; margin:0 auto 12px; border-radius:8px;
     background:var(--surface); box-shadow:var(--shadow);
   }
+  .upi-app-row{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+  .upi-app-btn{
+    display:inline-flex; align-items:center; padding:9px 16px; border-radius:10px;
+    background:var(--surface); border:1px solid var(--line); color:var(--ink);
+    font-weight:700; font-size:12.5px; text-decoration:none;
+  }
+  .upi-app-btn:hover{ border-color:var(--gold); }
 
   /* ============ Owner: stat tiles ============ */
   .stat-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
@@ -778,14 +785,27 @@
 
   /* ---------- UPI QR (static deep link — the owner still confirms receipt manually,
      same trust model as marking cash paid; there's no gateway verifying this) ---------- */
-  function buildUpiUri(order){
+  function upiQueryString(order){
     var vpa = (state.shop.upiId||"").trim();
     if(!vpa) return "";
     var payee = (state.shop.upiPayeeName||state.shop.name||"").trim();
-    return "upi://pay?pa=" + encodeURIComponent(vpa) +
+    return "pa=" + encodeURIComponent(vpa) +
       "&pn=" + encodeURIComponent(payee) +
       "&am=" + encodeURIComponent(order.total) +
       "&cu=INR&tn=" + encodeURIComponent("Order " + order.tokenDisplay);
+  }
+  // Android/iOS can silently default the generic upi:// scheme to whichever app last
+  // claimed it (often WhatsApp, since WhatsApp Pay registers as a handler too) — separate
+  // app-specific schemes let the customer pick GPay/PhonePe/Paytm directly, bypassing that.
+  function buildUpiAppLinks(order){
+    var qs = upiQueryString(order);
+    if(!qs) return null;
+    return {
+      generic: "upi://pay?" + qs,
+      gpay: "tez://upi/pay?" + qs,
+      phonepe: "phonepe://pay?" + qs,
+      paytm: "paytmmp://pay?" + qs
+    };
   }
   function renderUpiQr(){
     var img = document.getElementById("upi-qr-img");
@@ -1157,13 +1177,18 @@
     html += '<div class="kv-row"><span class="k">Items</span><span class="v" style="text-align:right;font-weight:600">' + order.items.map(function(l){ return l.qty+'× '+esc(l.name); }).join(', ') + '</span></div>';
 
     if(!terminal && order.paymentStatus !== "PAID"){
-      var upiUri = buildUpiUri(order);
-      if(upiUri){
+      var upiLinks = buildUpiAppLinks(order);
+      if(upiLinks){
         html += '<div class="upi-box">';
         html += '<div class="upi-box-head">📱 Pay ' + money(order.total) + ' via UPI</div>';
-        html += '<img id="upi-qr-img" data-uri="' + esc(upiUri) + '" alt="UPI QR code" class="upi-qr-img">';
-        html += '<a class="btn btn-sm btn-owner" href="' + esc(upiUri) + '" style="text-decoration:none">Open UPI app</a>';
-        html += '<p class="hint">Scan with any UPI app, or tap "Open UPI app" if you\'re on your phone. The shop marks this paid once they see it land — this isn\'t an automatic payment confirmation.</p>';
+        html += '<img id="upi-qr-img" data-uri="' + esc(upiLinks.generic) + '" alt="UPI QR code" class="upi-qr-img">';
+        html += '<div class="upi-app-row">';
+        html += '<a class="upi-app-btn" href="' + esc(upiLinks.gpay) + '">Google Pay</a>';
+        html += '<a class="upi-app-btn" href="' + esc(upiLinks.phonepe) + '">PhonePe</a>';
+        html += '<a class="upi-app-btn" href="' + esc(upiLinks.paytm) + '">Paytm</a>';
+        html += '<a class="upi-app-btn" href="' + esc(upiLinks.generic) + '">Other UPI app</a>';
+        html += '</div>';
+        html += '<p class="hint">Scan the QR, or tap your app above on your phone. If a button doesn\'t open anything, that app isn\'t installed — try another. The shop marks this paid once they see it land, this isn\'t an automatic payment confirmation.</p>';
         html += '</div>';
       }
     }
