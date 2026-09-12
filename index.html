@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Vesper+Libre:wght@500;700&family=Karla:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 <style>
   /* ============ Design tokens ============ */
   :root{
@@ -463,8 +465,8 @@
   <div id="ribbon" class="ribbon"></div>
   <div id="app"></div>
   <footer class="note">
-    Working prototype — every order, token and setting here lives only in this browser, so you and family can try<br>
-    the full flow end to end before it's wired to a real shared backend.<br>
+    Orders and shop settings now sync live across every device, this is a working prototype<br>
+    for one community food hub, not a hardened production system.<br>
     <button class="staff-link" id="btn-open-staff" type="button">Owner Login</button>
   </footer>
 </div>
@@ -474,6 +476,21 @@
 <script>
 (function(){
   "use strict";
+
+  /* ============ Cloud sync (Firebase Realtime Database) ============
+     hub/shop/menu/counter/orders are shared across every device via Firebase.
+     state.ui (role, cart, form drafts, unlock status) stays device-local in
+     localStorage, exactly as before — it was never meant to be shared. */
+  var firebaseConfig = {
+    apiKey: "AIzaSyC-rjzReNuth3LV3Pl9-dTzgqfcUtwyYqc",
+    authDomain: "dsk-food-hub.firebaseapp.com",
+    databaseURL: "https://dsk-food-hub-default-rtdb.firebaseio.com",
+    projectId: "dsk-food-hub",
+    storageBucket: "dsk-food-hub.firebasestorage.app",
+    messagingSenderId: "354315309281",
+    appId: "1:354315309281:web:e81d217a548291e92367a0"
+  };
+  var cloud = { enabled: false, db: null };
 
   /* ============ State ============ */
   var STORE_KEY = "dsk_food_hub_v1";
@@ -629,8 +646,53 @@
     state.counter.next = seq + 1;
     return seq;
   }
+  // Atomic across every device at once — Firebase retries the transaction itself if two
+  // customers submit within the same instant, so nobody can ever be handed the same token.
+  function allocateTokenCloud(callback){
+    var today = todayStr();
+    cloud.db.ref("counter").transaction(function(current){
+      if(!current || current.date !== today) return { date: today, next: 2 };
+      return { date: current.date, next: (current.next||1) + 1 };
+    }, function(error, committed, snapshot){
+      if(error || !committed || !snapshot){ callback(null); return; }
+      var val = snapshot.val();
+      callback((val.next||2) - 1);
+    });
+  }
   function tokenDisplay(seq){
     return state.shop.tokenPrefix + "-" + String(seq).padStart(3,"0");
+  }
+
+  // Optimistic local update (instant UI) + write-through to Firebase when connected.
+  function updateShop(patch){
+    Object.assign(state.shop, patch);
+    if(cloud.enabled) cloud.db.ref("shop").update(patch);
+    persist(); render();
+  }
+  function setMenuCloud(newMenu){
+    state.menu = newMenu;
+    if(cloud.enabled) cloud.db.ref("menu").set(newMenu);
+    persist(); render();
+  }
+  // Keys may be "slash/paths" (e.g. "stageTimes/ACCEPTED") so a nested field can be set
+  // without overwriting its siblings — same shape locally as in a Firebase multi-path update.
+  function setDeep(obj, path, value){
+    var parts = path.split("/"), cur = obj;
+    for(var i=0; i<parts.length-1; i++){
+      if(typeof cur[parts[i]] !== "object" || cur[parts[i]] === null) cur[parts[i]] = {};
+      cur = cur[parts[i]];
+    }
+    cur[parts[parts.length-1]] = value;
+  }
+  function patchOrderCloud(id, patch){
+    var o = state.orders.find(function(x){ return x.id === id; });
+    if(o) Object.keys(patch).forEach(function(k){ setDeep(o, k, patch[k]); });
+    if(cloud.enabled){
+      var multi = {};
+      Object.keys(patch).forEach(function(k){ multi["orders/" + id + "/" + k] = patch[k]; });
+      cloud.db.ref().update(multi);
+    }
+    persist();
   }
 
   function money(n){ return "₹" + Number(n||0).toLocaleString("en-IN"); }
@@ -745,6 +807,14 @@
 
   /* ============ Rendering ============ */
   function render(){
+    // Cloud updates can arrive and trigger a re-render at any moment, including while
+    // someone is mid-keystroke in an unrelated field — restore focus/cursor afterward
+    // so a live sync from another device never yanks the field out from under them.
+    var active = document.activeElement, focusInfo = null;
+    if(active && active.id && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")){
+      focusInfo = { id: active.id, start: active.selectionStart, end: active.selectionEnd };
+    }
+
     checkNewOrdersAndAnnounce();
     renderTopTabs();
     var showRibbon = state.ui.role === "owner" || state.ui.customerStep === "shop";
@@ -753,6 +823,14 @@
     var app = document.getElementById("app");
     app.innerHTML = (state.ui.role === "owner" ? ownerView() : customerView()) + renderPinPanel() + renderCustLoginPanel();
     bindEvents();
+
+    if(focusInfo){
+      var el = document.getElementById(focusInfo.id);
+      if(el){
+        el.focus();
+        try{ el.setSelectionRange(focusInfo.start, focusInfo.end); }catch(e){}
+      }
+    }
   }
 
   function renderTopTabs(){
@@ -1423,22 +1501,22 @@
 
     var rmId;
     if((rmId = attr(t,"data-remove-item"))){
-      state.menu = state.menu.filter(function(m){ return m.id !== rmId; });
-      if(state.shop.todaySpecialId === rmId) state.shop.todaySpecialId = "";
+      var afterRemove = state.menu.filter(function(m){ return m.id !== rmId; });
+      if(state.shop.todaySpecialId === rmId) updateShop({ todaySpecialId: "" });
       delete state.ui.cart[rmId];
-      persist(); render(); toast("Item removed"); return;
+      setMenuCloud(afterRemove); toast("Item removed"); return;
     }
     if(t.id === "btn-add-item"){
       var nName = (state.ui.newItemName||"").trim();
       var nPrice = parseInt(state.ui.newItemPrice,10);
       if(!nName){ toast("Give the new item a name first."); return; }
       if(!(nPrice >= 0)){ toast("Give the new item a valid price."); return; }
-      state.menu.push({
+      var afterAdd = state.menu.concat([{
         id: uid(), name: nName, local: (state.ui.newItemLocal||"").trim(),
         price: nPrice, available: true, occasion: (state.ui.newItemOccasion||"").trim()
-      });
+      }]);
       state.ui.newItemName = ""; state.ui.newItemLocal = ""; state.ui.newItemPrice = ""; state.ui.newItemOccasion = "";
-      persist(); render(); toast("Added " + nName + " to the menu"); return;
+      setMenuCloud(afterAdd); toast("Added " + nName + " to the menu"); return;
     }
 
     if(t.id === "btn-enter-hubs"){ state.ui.customerStep = "hubs"; persist(); render(); return; }
@@ -1477,20 +1555,20 @@
     }
 
     if(t.id === "btn-save-closure"){
-      state.shop.closureReason = document.getElementById("in-closure-reason").value.trim();
-      persist(); render(); toast("Closure reason saved"); return;
+      updateShop({ closureReason: document.getElementById("in-closure-reason").value.trim() });
+      toast("Closure reason saved"); return;
     }
     if(t.id === "btn-save-holiday"){
       var from = document.getElementById("in-hol-from").value;
       var to = document.getElementById("in-hol-to").value;
       var reason = document.getElementById("in-hol-reason").value.trim();
       if(from && to && from > to){ toast("Start date must be before end date"); return; }
-      state.shop.holidayFrom = from; state.shop.holidayTo = to; state.shop.holidayReason = reason;
-      persist(); render(); toast("Holiday saved"); return;
+      updateShop({ holidayFrom: from, holidayTo: to, holidayReason: reason });
+      toast("Holiday saved"); return;
     }
     if(t.id === "btn-clear-holiday"){
-      state.shop.holidayFrom = ""; state.shop.holidayTo = ""; state.shop.holidayReason = "";
-      persist(); render(); toast("Holiday cleared"); return;
+      updateShop({ holidayFrom: "", holidayTo: "", holidayReason: "" });
+      toast("Holiday cleared"); return;
     }
     var wd = attr(t,"data-weekday");
     if(wd !== null){
@@ -1498,8 +1576,7 @@
       var wh = (state.shop.weeklyHolidays||[]).slice();
       var pos = wh.indexOf(wd);
       if(pos === -1) wh.push(wd); else wh.splice(pos,1);
-      state.shop.weeklyHolidays = wh;
-      persist(); render(); return;
+      updateShop({ weeklyHolidays: wh }); return;
     }
     if(t.id === "btn-export-csv"){ exportOrdersCsv(); return; }
     if(t.id === "btn-voice-test"){ speak("This is a test announcement for " + state.shop.name + "."); return; }
@@ -1523,26 +1600,35 @@
 
   function onAppChange(e){
     var t = e.target;
-    if(t.id === "tg-open"){ state.shop.isOpenManual = t.checked; persist(); render(); toast(t.checked?"Hub marked open":"Hub marked closed"); return; }
-    if(t.id === "tg-delivery"){ state.shop.deliveryEnabled = t.checked; if(!t.checked && state.ui.fulfilment==="DELIVERY") state.ui.fulfilment="PICKUP"; persist(); render(); toast(t.checked?"Home delivery enabled":"Home delivery disabled"); return; }
+    if(t.id === "tg-open"){ updateShop({ isOpenManual: t.checked }); toast(t.checked?"Hub marked open":"Hub marked closed"); return; }
+    if(t.id === "tg-delivery"){
+      if(!t.checked && state.ui.fulfilment==="DELIVERY") state.ui.fulfilment="PICKUP";
+      updateShop({ deliveryEnabled: t.checked }); toast(t.checked?"Home delivery enabled":"Home delivery disabled"); return;
+    }
     if(t.id === "tg-voice"){
-      state.shop.voiceAnnounce = t.checked; persist(); render();
+      updateShop({ voiceAnnounce: t.checked });
       toast(t.checked ? "Voice alerts on" : "Voice alerts off");
       if(t.checked) speak("Voice alerts are on.");
       return;
     }
-    if(t.id === "sel-special"){ state.shop.todaySpecialId = t.value; persist(); render(); return; }
-    if(t.id === "in-open-time"){ state.shop.openTime = t.value; persist(); render(); return; }
-    if(t.id === "in-close-time"){ state.shop.closeTime = t.value; persist(); render(); return; }
+    if(t.id === "sel-special"){ updateShop({ todaySpecialId: t.value }); return; }
+    if(t.id === "in-open-time"){ updateShop({ openTime: t.value }); return; }
+    if(t.id === "in-close-time"){ updateShop({ closeTime: t.value }); return; }
+    // Free-text shop fields sync on blur (change), not every keystroke — avoids a cloud
+    // echo mid-typing rebuilding the input and yanking the cursor away.
+    if(t.id === "in-owner-whatsapp"){ if(cloud.enabled) cloud.db.ref("shop").update({ ownerWhatsapp: t.value }); return; }
+    if(t.id === "in-shop-address"){ if(cloud.enabled) cloud.db.ref("shop").update({ address: t.value }); return; }
+    if(t.id === "in-shop-address-local"){ if(cloud.enabled) cloud.db.ref("shop").update({ addressLocal: t.value }); return; }
+    if(t.id === "in-staff-pin"){ if(cloud.enabled) cloud.db.ref("shop").update({ staffPin: t.value }); return; }
     var id;
     if((id = attr(t,"data-price"))){
       var item = state.menu.find(function(m){ return m.id===id; });
-      if(item){ item.price = Math.max(0, parseInt(t.value,10) || 0); persist(); }
+      if(item){ item.price = Math.max(0, parseInt(t.value,10) || 0); setMenuCloud(state.menu); }
       return;
     }
     if((id = attr(t,"data-avail"))){
       var it2 = state.menu.find(function(m){ return m.id===id; });
-      if(it2){ it2.available = t.checked; persist(); render(); }
+      if(it2){ it2.available = t.checked; setMenuCloud(state.menu); }
       return;
     }
   }
@@ -1579,55 +1665,62 @@
     if(state.ui.fulfilment === "DELIVERY" && !address){ showErr("Please enter a delivery address."); return; }
     state.ui.customerLoggedIn = true;
 
-    var seq = allocateToken();
-    var order = {
-      id: uid(),
-      tokenSeq: seq,
-      tokenDisplay: tokenDisplay(seq),
-      serviceDate: todayStr(),
-      name: name, phone: phone,
-      fulfilment: state.ui.fulfilment,
-      address: state.ui.fulfilment==="DELIVERY" ? address : "",
-      items: lines.map(function(l){ return { name:l.item.name, price:l.item.price, qty:l.qty }; }),
-      total: cartTotal(lines),
-      notes: (state.ui.notes||"").trim(),
-      status: "PENDING",
-      paymentStatus: "DUE",
-      rejectReason: "",
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      stageTimes: { PENDING: Date.now() }
-    };
-    state.orders.push(order);
-    state.ui.cart = {};
-    state.ui.notes = "";
-    state.ui.activeOrderId = order.id;
-    persist();
-    render();
-    toast("Order placed — token " + order.tokenDisplay);
+    function finish(seq){
+      if(seq == null){ showErr("Could not reach the shop right now — please try again."); return; }
+      var id = (cloud.enabled && cloud.db) ? cloud.db.ref("orders").push().key : uid();
+      var order = {
+        id: id,
+        tokenSeq: seq,
+        tokenDisplay: tokenDisplay(seq),
+        serviceDate: todayStr(),
+        name: name, phone: phone,
+        fulfilment: state.ui.fulfilment,
+        address: state.ui.fulfilment==="DELIVERY" ? address : "",
+        items: lines.map(function(l){ return { name:l.item.name, price:l.item.price, qty:l.qty }; }),
+        total: cartTotal(lines),
+        notes: (state.ui.notes||"").trim(),
+        status: "PENDING",
+        paymentStatus: "DUE",
+        rejectReason: "",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        stageTimes: { PENDING: Date.now() }
+      };
+      state.orders.push(order);
+      if(cloud.enabled) cloud.db.ref("orders/" + id).set(order);
+      state.ui.cart = {};
+      state.ui.notes = "";
+      state.ui.activeOrderId = order.id;
+      persist();
+      render();
+      toast("Order placed — token " + order.tokenDisplay);
+    }
+
+    if(cloud.enabled) allocateTokenCloud(finish);
+    else finish(allocateToken());
   }
 
   function setOrderStatus(id, status){
     var o = state.orders.find(function(x){ return x.id===id; });
     if(!o) return;
-    o.status = status; o.updatedAt = Date.now();
-    o.stageTimes = o.stageTimes || {}; o.stageTimes[status] = Date.now();
-    persist(); render();
+    var now = Date.now();
+    patchOrderCloud(id, { status: status, updatedAt: now, ["stageTimes/" + status]: now });
+    render();
     toast(o.tokenDisplay + " → " + status.charAt(0)+status.slice(1).toLowerCase());
   }
   function markPaid(id){
     var o = state.orders.find(function(x){ return x.id===id; });
     if(!o) return;
-    o.paymentStatus = "PAID"; o.updatedAt = Date.now();
-    persist(); render(); toast(o.tokenDisplay + " marked paid");
+    patchOrderCloud(id, { paymentStatus: "PAID", updatedAt: Date.now() });
+    render(); toast(o.tokenDisplay + " marked paid");
   }
   function confirmReject(id, reason){
     var o = state.orders.find(function(x){ return x.id===id; });
     if(!o) return;
-    o.status = "REJECTED"; o.rejectReason = reason || "Not specified"; o.updatedAt = Date.now();
-    o.stageTimes = o.stageTimes || {}; o.stageTimes.REJECTED = Date.now();
+    var now = Date.now();
+    patchOrderCloud(id, { status: "REJECTED", rejectReason: reason || "Not specified", updatedAt: now, ["stageTimes/REJECTED"]: now });
     state.ui.rejecting = null;
-    persist(); render(); toast(o.tokenDisplay + " rejected");
+    render(); toast(o.tokenDisplay + " rejected");
   }
   function fmtTime(ts){ return new Date(ts).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}); }
 
@@ -1667,12 +1760,49 @@
     state.orders = incoming.orders || state.orders;
   }
   window.addEventListener("storage", function(e){
+    // Once Firebase is connected it's the single source of truth for shared data —
+    // this same-browser-tab fallback is only for when the cloud is unreachable.
+    if(cloud.enabled) return;
     if(e.key !== STORE_KEY || !e.newValue) return;
     var incoming;
     try{ incoming = JSON.parse(e.newValue); }catch(err){ return; }
     mergeIncomingSharedState(incoming);
     render(); // render() itself runs the new-order check, so any fresh order gets announced here
   });
+
+  /* ---------- Cloud connect: subscribe to shared data, seed it if this is a brand-new DB ---------- */
+  function seedCloudIfEmpty(){
+    cloud.db.ref("shop").once("value").then(function(snap){
+      if(snap.exists()) return;
+      cloud.db.ref().update({
+        hub: DEFAULT_STATE.hub,
+        shop: DEFAULT_STATE.shop,
+        menu: DEFAULT_STATE.menu,
+        counter: DEFAULT_STATE.counter
+      });
+    }).catch(function(){});
+  }
+  function attachCloudListeners(){
+    cloud.db.ref("hub").on("value", function(snap){ if(snap.exists()){ state.hub = snap.val(); render(); } });
+    cloud.db.ref("shop").on("value", function(snap){ if(snap.exists()){ state.shop = Object.assign({}, DEFAULT_STATE.shop, snap.val()); render(); } });
+    cloud.db.ref("menu").on("value", function(snap){ if(snap.exists()){ state.menu = snap.val(); render(); } });
+    cloud.db.ref("counter").on("value", function(snap){ if(snap.exists()){ state.counter = snap.val(); } });
+    cloud.db.ref("orders").on("value", function(snap){
+      var val = snap.val();
+      state.orders = val ? Object.keys(val).map(function(k){ var o = val[k]; o.id = k; return o; }) : [];
+      render();
+    });
+  }
+  (function initCloud(){
+    if(!(window.firebase && firebaseConfig && firebaseConfig.apiKey)) return;
+    try{
+      firebase.initializeApp(firebaseConfig);
+      cloud.db = firebase.database();
+      cloud.enabled = true;
+      seedCloudIfEmpty();
+      attachCloudListeners();
+    }catch(e){ cloud.enabled = false; cloud.db = null; }
+  })();
 
   function submitPin(){
     var entered = (state.ui.pinInput||"").trim();
