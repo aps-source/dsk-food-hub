@@ -492,12 +492,18 @@
     appId: "1:354315309281:web:e81d217a548291e92367a0"
   };
   var cloud = { enabled: false, db: null };
+  // Difference between Firebase's clock and this device's own clock. A phone with the
+  // wrong date/time set would otherwise allocate tokens for the wrong day, or throw off
+  // "today's orders" filtering — every timestamp this app writes goes through nowMs()
+  // instead of trusting the device directly.
+  var serverTimeOffsetMs = 0;
+  function nowMs(){ return Date.now() + serverTimeOffsetMs; }
 
   /* ============ State ============ */
   var STORE_KEY = "dsk_food_hub_v1";
 
   function todayStr(){
-    var d = new Date();
+    var d = new Date(nowMs());
     return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
   }
   function fmtDate(s){
@@ -580,7 +586,7 @@
     state.ui.showPin = false; state.ui.pinInput = ""; state.ui.pinError = "";
     state.ui.showCustLogin = false; state.ui.custLoginError = "";
     // Start the "new order" clock at first load so pre-existing orders never get announced.
-    if(state.ui.lastSeenOrderTs == null) state.ui.lastSeenOrderTs = Date.now();
+    if(state.ui.lastSeenOrderTs == null) state.ui.lastSeenOrderTs = nowMs();
   })();
   function persist(){
     try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){}
@@ -637,7 +643,7 @@
     if(!shop.isOpenManual){
       return { state:"CLOSED", reason: shop.closureReason || "Closed for now" };
     }
-    var now = new Date();
+    var now = new Date(nowMs());
     var dow = now.getDay();
     if((shop.weeklyHolidays||[]).indexOf(dow) !== -1){
       return { state:"CLOSED", reason: "Weekly off (" + WEEKDAY_NAMES[dow] + ")" };
@@ -692,13 +698,28 @@
   // Optimistic local update (instant UI) + write-through to Firebase when connected.
   function updateShop(patch){
     Object.assign(state.shop, patch);
-    if(cloud.enabled) cloud.db.ref("shop").update(patch);
+    if(cloud.enabled){
+      cloud.db.ref("shop").update(patch).catch(function(){
+        toast("Couldn't save that change — check your connection and try again.");
+      });
+    }
     persist(); render();
   }
-  function setMenuCloud(newMenu){
-    state.menu = newMenu;
-    if(cloud.enabled) cloud.db.ref("menu").set(newMenu);
+  // Applies `mutator` to a local optimistic copy immediately (instant feedback), and
+  // separately re-applies the SAME mutator inside a Firebase transaction against whatever
+  // the server's current menu actually is. That second application is what makes two
+  // owner devices editing the menu at the same moment safe — a transaction re-reads and
+  // re-applies rather than blindly overwriting with a snapshot that might already be stale.
+  function mutateMenuCloud(mutator){
+    state.menu = mutator(state.menu.slice());
     persist(); render();
+    if(cloud.enabled){
+      cloud.db.ref("menu").transaction(function(current){
+        return mutator((current || []).slice());
+      }, function(error){
+        if(error) toast("Could not save the menu change — try again.");
+      });
+    }
   }
   // Keys may be "slash/paths" (e.g. "stageTimes/ACCEPTED") so a nested field can be set
   // without overwriting its siblings — same shape locally as in a Firebase multi-path update.
@@ -716,7 +737,9 @@
     if(cloud.enabled){
       var multi = {};
       Object.keys(patch).forEach(function(k){ multi["orders/" + id + "/" + k] = patch[k]; });
-      cloud.db.ref().update(multi);
+      cloud.db.ref().update(multi).catch(function(){
+        toast("Couldn't save that order update — check your connection and try again.");
+      });
     }
     persist();
   }
@@ -1539,22 +1562,23 @@
 
     var rmId;
     if((rmId = attr(t,"data-remove-item"))){
-      var afterRemove = state.menu.filter(function(m){ return m.id !== rmId; });
       if(state.shop.todaySpecialId === rmId) updateShop({ todaySpecialId: "" });
       delete state.ui.cart[rmId];
-      setMenuCloud(afterRemove); toast("Item removed"); return;
+      mutateMenuCloud(function(arr){ return arr.filter(function(m){ return m.id !== rmId; }); });
+      toast("Item removed"); return;
     }
     if(t.id === "btn-add-item"){
       var nName = (state.ui.newItemName||"").trim();
       var nPrice = parseInt(state.ui.newItemPrice,10);
       if(!nName){ toast("Give the new item a name first."); return; }
       if(!(nPrice >= 0)){ toast("Give the new item a valid price."); return; }
-      var afterAdd = state.menu.concat([{
+      var newItem = {
         id: uid(), name: nName, local: (state.ui.newItemLocal||"").trim(),
         price: nPrice, available: true, occasion: (state.ui.newItemOccasion||"").trim()
-      }]);
+      };
       state.ui.newItemName = ""; state.ui.newItemLocal = ""; state.ui.newItemPrice = ""; state.ui.newItemOccasion = "";
-      setMenuCloud(afterAdd); toast("Added " + nName + " to the menu"); return;
+      mutateMenuCloud(function(arr){ return arr.concat([newItem]); });
+      toast("Added " + nName + " to the menu"); return;
     }
 
     if(t.id === "btn-enter-hubs"){ state.ui.customerStep = "hubs"; persist(); render(); return; }
@@ -1667,13 +1691,21 @@
     if(t.id === "in-staff-pin"){ if(cloud.enabled) cloud.db.ref("shop").update({ staffPin: t.value }); return; }
     var id;
     if((id = attr(t,"data-price"))){
-      var item = state.menu.find(function(m){ return m.id===id; });
-      if(item){ item.price = Math.max(0, parseInt(t.value,10) || 0); setMenuCloud(state.menu); }
+      var newPrice = Math.max(0, parseInt(t.value,10) || 0);
+      mutateMenuCloud(function(arr){
+        var it = arr.find(function(m){ return m.id === id; });
+        if(it) it.price = newPrice;
+        return arr;
+      });
       return;
     }
     if((id = attr(t,"data-avail"))){
-      var it2 = state.menu.find(function(m){ return m.id===id; });
-      if(it2){ it2.available = t.checked; setMenuCloud(state.menu); }
+      var newAvail = t.checked;
+      mutateMenuCloud(function(arr){
+        var it = arr.find(function(m){ return m.id === id; });
+        if(it) it.available = newAvail;
+        return arr;
+      });
       return;
     }
   }
@@ -1727,9 +1759,9 @@
         status: "PENDING",
         paymentStatus: "DUE",
         rejectReason: "",
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        stageTimes: { PENDING: Date.now() }
+        createdAt: nowMs(),
+        updatedAt: nowMs(),
+        stageTimes: { PENDING: nowMs() }
       };
       state.orders.push(order);
       if(cloud.enabled) cloud.db.ref("orders/" + id).set(order);
@@ -1748,7 +1780,7 @@
   function setOrderStatus(id, status){
     var o = state.orders.find(function(x){ return x.id===id; });
     if(!o) return;
-    var now = Date.now();
+    var now = nowMs();
     patchOrderCloud(id, { status: status, updatedAt: now, ["stageTimes/" + status]: now });
     render();
     toast(o.tokenDisplay + " → " + status.charAt(0)+status.slice(1).toLowerCase());
@@ -1756,13 +1788,13 @@
   function markPaid(id){
     var o = state.orders.find(function(x){ return x.id===id; });
     if(!o) return;
-    patchOrderCloud(id, { paymentStatus: "PAID", updatedAt: Date.now() });
+    patchOrderCloud(id, { paymentStatus: "PAID", updatedAt: nowMs() });
     render(); toast(o.tokenDisplay + " marked paid");
   }
   function confirmReject(id, reason){
     var o = state.orders.find(function(x){ return x.id===id; });
     if(!o) return;
-    var now = Date.now();
+    var now = nowMs();
     patchOrderCloud(id, { status: "REJECTED", rejectReason: reason || "Not specified", updatedAt: now, ["stageTimes/REJECTED"]: now });
     state.ui.rejecting = null;
     render(); toast(o.tokenDisplay + " rejected");
@@ -1792,7 +1824,7 @@
     var fresh = state.orders.filter(function(o){ return o.createdAt > last && o.serviceDate === todayStr() && o.status === "PENDING"; });
     if(fresh.length === 0) return;
     fresh.sort(function(a,b){ return a.createdAt - b.createdAt; }).forEach(announceOrder);
-    state.ui.lastSeenOrderTs = Date.now();
+    state.ui.lastSeenOrderTs = nowMs();
     persist();
   }
   // Merge shared shop/order data written by another tab of the same browser, without touching
@@ -1815,6 +1847,14 @@
     render(); // render() itself runs the new-order check, so any fresh order gets announced here
   });
 
+  // Phones aggressively suspend background tabs — Firebase's listeners can be throttled
+  // and miss firing a voice alert while the screen is off or another app is in front.
+  // Catch up the moment the tab is looked at again instead of waiting for the next
+  // unrelated render.
+  document.addEventListener("visibilitychange", function(){
+    if(document.visibilityState === "visible"){ checkNewOrdersAndAnnounce(); render(); }
+  });
+
   /* ---------- Cloud connect: subscribe to shared data, seed it if this is a brand-new DB ---------- */
   function seedCloudIfEmpty(){
     cloud.db.ref("shop").once("value").then(function(snap){
@@ -1830,7 +1870,16 @@
   function attachCloudListeners(){
     cloud.db.ref("hub").on("value", function(snap){ if(snap.exists()){ state.hub = snap.val(); render(); } });
     cloud.db.ref("shop").on("value", function(snap){ if(snap.exists()){ state.shop = Object.assign({}, DEFAULT_STATE.shop, snap.val()); render(); } });
-    cloud.db.ref("menu").on("value", function(snap){ if(snap.exists()){ state.menu = snap.val(); render(); } });
+    cloud.db.ref("menu").on("value", function(snap){
+      if(!snap.exists()) return;
+      state.menu = snap.val();
+      var droppedAny = false;
+      Object.keys(state.ui.cart).forEach(function(id){
+        if(!state.menu.find(function(m){ return m.id === id; })){ delete state.ui.cart[id]; droppedAny = true; }
+      });
+      if(droppedAny){ persist(); toast("An item in your cart is no longer on the menu — it's been removed"); }
+      render();
+    });
     cloud.db.ref("counter").on("value", function(snap){ if(snap.exists()){ state.counter = snap.val(); } });
     cloud.db.ref("orders").on("value", function(snap){
       var val = snap.val();
@@ -1844,6 +1893,9 @@
       firebase.initializeApp(firebaseConfig);
       cloud.db = firebase.database();
       cloud.enabled = true;
+      cloud.db.ref(".info/serverTimeOffset").on("value", function(snap){
+        serverTimeOffsetMs = snap.val() || 0;
+      });
       seedCloudIfEmpty();
       attachCloudListeners();
     }catch(e){ cloud.enabled = false; cloud.db = null; }
