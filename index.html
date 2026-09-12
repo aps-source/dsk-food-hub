@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Vesper+Libre:wght@500;700&family=Karla:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
 <style>
   /* ============ Design tokens ============ */
   :root{
@@ -325,6 +326,13 @@
   .kv-row .k{ color:var(--ink-soft); }
   .kv-row .v{ font-weight:700; }
 
+  .upi-box{ text-align:center; background:var(--surface-2); border-radius:12px; padding:16px; margin-top:14px; }
+  .upi-box-head{ font-weight:800; font-size:13.5px; margin-bottom:10px; }
+  .upi-qr-img{
+    width:180px; height:180px; display:block; margin:0 auto 12px; border-radius:8px;
+    background:var(--surface); box-shadow:var(--shadow);
+  }
+
   /* ============ Owner: stat tiles ============ */
   .stat-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
   @media (min-width:640px){ .stat-grid{ grid-template-columns:repeat(4,1fr); } }
@@ -532,6 +540,8 @@
       avgPrepMinutes: 8,
       todaySpecialId: "puranpoli",
       ownerWhatsapp: "",
+      upiId: "",
+      upiPayeeName: "",
       staffPin: "1234",
       openTime1: "09:00",
       closeTime1: "13:00",
@@ -765,6 +775,25 @@
     if(!n) return "";
     return "https://wa.me/" + n + "?text=" + encodeURIComponent(text);
   }
+
+  /* ---------- UPI QR (static deep link — the owner still confirms receipt manually,
+     same trust model as marking cash paid; there's no gateway verifying this) ---------- */
+  function buildUpiUri(order){
+    var vpa = (state.shop.upiId||"").trim();
+    if(!vpa) return "";
+    var payee = (state.shop.upiPayeeName||state.shop.name||"").trim();
+    return "upi://pay?pa=" + encodeURIComponent(vpa) +
+      "&pn=" + encodeURIComponent(payee) +
+      "&am=" + encodeURIComponent(order.total) +
+      "&cu=INR&tn=" + encodeURIComponent("Order " + order.tokenDisplay);
+  }
+  function renderUpiQr(){
+    var img = document.getElementById("upi-qr-img");
+    if(!img || !window.QRious) return;
+    var uri = img.getAttribute("data-uri");
+    if(!uri) return;
+    try{ new QRious({ element: img, value: uri, size: 200, level: "M" }); }catch(e){}
+  }
   function orderSummaryText(o){
     var lines = o.items.map(function(l){ return "- " + l.qty + "x " + l.name + " (" + money(l.price) + ")"; }).join("\n");
     var addr = o.fulfilment === "DELIVERY" ? ("\nDeliver to: " + o.address) : "";
@@ -872,6 +901,7 @@
     var app = document.getElementById("app");
     app.innerHTML = (state.ui.role === "owner" ? ownerView() : customerView()) + renderPinPanel() + renderCustLoginPanel();
     bindEvents();
+    renderUpiQr();
 
     if(focusInfo){
       var el = document.getElementById(focusInfo.id);
@@ -1125,6 +1155,18 @@
     }
     html += '<div class="kv-row"><span class="k">Amount due</span><span class="v">' + money(order.total) + ' · ' + (order.paymentStatus==="PAID" ? '<span class="paid-pill paid-PAID">Paid</span>' : '<span class="paid-pill paid-DUE">Pay at hub</span>') + '</span></div>';
     html += '<div class="kv-row"><span class="k">Items</span><span class="v" style="text-align:right;font-weight:600">' + order.items.map(function(l){ return l.qty+'× '+esc(l.name); }).join(', ') + '</span></div>';
+
+    if(!terminal && order.paymentStatus !== "PAID"){
+      var upiUri = buildUpiUri(order);
+      if(upiUri){
+        html += '<div class="upi-box">';
+        html += '<div class="upi-box-head">📱 Pay ' + money(order.total) + ' via UPI</div>';
+        html += '<img id="upi-qr-img" data-uri="' + esc(upiUri) + '" alt="UPI QR code" class="upi-qr-img">';
+        html += '<a class="btn btn-sm btn-owner" href="' + esc(upiUri) + '" style="text-decoration:none">Open UPI app</a>';
+        html += '<p class="hint">Scan with any UPI app, or tap "Open UPI app" if you\'re on your phone. The shop marks this paid once they see it land — this isn\'t an automatic payment confirmation.</p>';
+        html += '</div>';
+      }
+    }
 
     var shopWa = waLink(state.shop.ownerWhatsapp, orderSummaryText(order));
     if(order.status === "PENDING"){
@@ -1427,6 +1469,15 @@
     html += '<button class="btn btn-ghost btn-sm" id="btn-lock-now" style="color:var(--red)">🔒 Lock owner view on this device</button>';
     html += '</div>';
 
+    // UPI payment
+    html += '<div class="card accent-owner">';
+    html += '<h2>UPI payment</h2>';
+    html += '<p class="sub">Customers get a scannable QR code on their token screen. This is a payment request, not a gateway — you still confirm you\'ve received the money and mark the order paid yourself, exactly like cash.</p>';
+    html += '<div class="field"><label>UPI ID (VPA)</label><input type="text" id="in-upi-id" value="' + esc(state.shop.upiId) + '" placeholder="e.g. shopname@okhdfcbank"></div>';
+    html += '<div class="field"><label>Payee name shown to customer (optional)</label><input type="text" id="in-upi-payee" value="' + esc(state.shop.upiPayeeName) + '" placeholder="' + esc(state.shop.name) + '"></div>';
+    if(!state.shop.upiId) html += '<p class="hint">Leave UPI ID blank to hide this option and keep pay-at-hub only.</p>';
+    html += '</div>';
+
     html += '<div class="card" style="text-align:center">';
     if(!state.ui.resetArm){
       html += '<button class="btn btn-ghost btn-sm" id="btn-reset-arm" style="color:var(--red)">Reset demo data</button>';
@@ -1689,6 +1740,8 @@
     if(t.id === "in-shop-address"){ if(cloud.enabled) cloud.db.ref("shop").update({ address: t.value }); return; }
     if(t.id === "in-shop-address-local"){ if(cloud.enabled) cloud.db.ref("shop").update({ addressLocal: t.value }); return; }
     if(t.id === "in-staff-pin"){ if(cloud.enabled) cloud.db.ref("shop").update({ staffPin: t.value }); return; }
+    if(t.id === "in-upi-id"){ if(cloud.enabled) cloud.db.ref("shop").update({ upiId: t.value.trim() }); return; }
+    if(t.id === "in-upi-payee"){ if(cloud.enabled) cloud.db.ref("shop").update({ upiPayeeName: t.value.trim() }); return; }
     var id;
     if((id = attr(t,"data-price"))){
       var newPrice = Math.max(0, parseInt(t.value,10) || 0);
@@ -1720,6 +1773,8 @@
     else if(t.id === "in-shop-address"){ state.shop.address = t.value; persist(); }
     else if(t.id === "in-shop-address-local"){ state.shop.addressLocal = t.value; persist(); }
     else if(t.id === "in-staff-pin"){ state.shop.staffPin = t.value; persist(); }
+    else if(t.id === "in-upi-id"){ state.shop.upiId = t.value; persist(); }
+    else if(t.id === "in-upi-payee"){ state.shop.upiPayeeName = t.value; persist(); }
     else if(t.id === "pin-input"){ state.ui.pinInput = t.value; state.ui.pinError = ""; persist(); }
     else if(t.id === "in-cust-login-name"){ state.ui.custLoginName = t.value; state.ui.custLoginError = ""; persist(); }
     else if(t.id === "in-cust-login-phone"){ state.ui.custLoginPhone = t.value; state.ui.custLoginError = ""; persist(); }
