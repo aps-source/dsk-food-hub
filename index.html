@@ -120,6 +120,15 @@
   }
   .staff-link:hover{ color:var(--ink); }
 
+  .cust-id-box{ display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:700; color:var(--ink-soft); }
+  .cust-id-btn{
+    border:1px solid var(--line); background:var(--surface); color:var(--ink-soft); font-weight:700; font-size:12.5px;
+    padding:7px 14px; border-radius:999px; cursor:pointer; font-family:inherit;
+  }
+  .cust-id-btn:hover{ color:var(--ink); border-color:var(--teal); }
+  .cust-id-btn.primary{ background:var(--gold); border-color:var(--gold); color:#241B12; }
+  .cust-id-btn.primary:hover{ color:#241B12; opacity:.9; }
+
   .modal-backdrop{
     position:fixed; inset:0; background:rgba(20,14,8,.5); display:flex; align-items:center; justify-content:center;
     padding:20px; z-index:60;
@@ -330,6 +339,7 @@
   .owner-tab-btn[aria-pressed="true"]{ background:var(--ink); border-color:var(--ink); color:var(--paper); }
   .owner-tab-btn:hover:not([aria-pressed="true"]){ border-color:var(--teal); color:var(--ink); }
   .orders-page-head{ margin:18px 0 4px; }
+  .voice-toggle-box{ display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:700; color:var(--ink-soft); background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:8px 12px; }
   .prep-summary{ margin-bottom:18px; }
   .prep-chip{ display:inline-flex; align-items:center; gap:6px; background:var(--gold-soft); color:var(--gold-ink); border-radius:10px; padding:8px 14px; font-weight:700; font-size:13.5px; }
   .prep-chip b{ font-family:'IBM Plex Mono'; font-size:15px; }
@@ -455,7 +465,7 @@
   <footer class="note">
     Working prototype — every order, token and setting here lives only in this browser, so you and family can try<br>
     the full flow end to end before it's wired to a real shared backend.<br>
-    <button class="staff-link" id="btn-open-staff" type="button">Shop staff sign-in</button>
+    <button class="staff-link" id="btn-open-staff" type="button">Owner Login</button>
   </footer>
 </div>
 
@@ -501,7 +511,8 @@
       staffPin: "1234",
       openTime: "09:00",
       closeTime: "21:00",
-      weeklyHolidays: []
+      weeklyHolidays: [],
+      voiceAnnounce: true
     },
     menu: [
       {id:"tandul",    name:"Tandul Bhakri", local:"तांदूळ भाकरी", price:25, available:true, occasion:""},
@@ -517,7 +528,9 @@
     ui: { role:"customer", ownerUnlocked:false, showPin:false, pinInput:"", pinError:"",
           customerStep:"welcome", cart:{}, fulfilment:"PICKUP", name:"", phone:"", address:"", notes:"",
           activeOrderId:null, rejecting:null, resetArm:false,
-          ownerTab:"orders", newItemName:"", newItemLocal:"", newItemPrice:"", newItemOccasion:"" }
+          ownerTab:"orders", newItemName:"", newItemLocal:"", newItemPrice:"", newItemOccasion:"",
+          customerLoggedIn:false, showCustLogin:false, custLoginName:"", custLoginPhone:"", custLoginError:"",
+          lastSeenOrderTs: null }
   };
 
   function load(){
@@ -545,6 +558,9 @@
     // never leave a page loaded straight into it just because a stale value was saved.
     if(!state.ui.ownerUnlocked) state.ui.role = "customer";
     state.ui.showPin = false; state.ui.pinInput = ""; state.ui.pinError = "";
+    state.ui.showCustLogin = false; state.ui.custLoginError = "";
+    // Start the "new order" clock at first load so pre-existing orders never get announced.
+    if(state.ui.lastSeenOrderTs == null) state.ui.lastSeenOrderTs = Date.now();
   })();
   function persist(){
     try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){}
@@ -729,38 +745,63 @@
 
   /* ============ Rendering ============ */
   function render(){
+    checkNewOrdersAndAnnounce();
     renderTopTabs();
     var showRibbon = state.ui.role === "owner" || state.ui.customerStep === "shop";
     var ribbon = document.getElementById("ribbon");
     if(showRibbon){ ribbon.style.display=""; renderRibbon(); } else { ribbon.style.display="none"; }
     var app = document.getElementById("app");
-    app.innerHTML = (state.ui.role === "owner" ? ownerView() : customerView()) + renderPinPanel();
+    app.innerHTML = (state.ui.role === "owner" ? ownerView() : customerView()) + renderPinPanel() + renderCustLoginPanel();
     bindEvents();
   }
 
   function renderTopTabs(){
     var slot = document.getElementById("mode-pill-slot");
-    if(!state.ui.ownerUnlocked){ slot.innerHTML = ""; return; }
-    var isOwner = state.ui.role === "owner";
-    slot.innerHTML =
-      '<div class="staff-switch">' +
-        '<button class="staff-btn" data-staff-role="customer" aria-pressed="' + (!isOwner) + '">Customer</button>' +
-        '<button class="staff-btn" data-staff-role="owner" aria-pressed="' + (isOwner) + '">🧑‍🍳 Owner</button>' +
-        '<button class="staff-btn lock" id="btn-lock-staff" title="Exit staff mode">🔒</button>' +
-      '</div>';
+    if(state.ui.ownerUnlocked){
+      var isOwner = state.ui.role === "owner";
+      slot.innerHTML =
+        '<div class="staff-switch">' +
+          '<button class="staff-btn" data-staff-role="customer" aria-pressed="' + (!isOwner) + '">Customer</button>' +
+          '<button class="staff-btn" data-staff-role="owner" aria-pressed="' + (isOwner) + '">🧑‍🍳 Owner</button>' +
+          '<button class="staff-btn lock" id="btn-lock-staff" title="Exit staff mode">🔒</button>' +
+        '</div>';
+      return;
+    }
+    if(state.ui.customerLoggedIn && state.ui.name){
+      slot.innerHTML = '<div class="cust-id-box"><span>👋 ' + esc(state.ui.name.split(" ")[0]) + '</span><button class="cust-id-btn" id="btn-cust-logout">Logout</button></div>';
+    } else {
+      slot.innerHTML = '<button class="cust-id-btn primary" id="btn-cust-login">👤 Login</button>';
+    }
   }
 
   function renderPinPanel(){
     if(!state.ui.showPin) return "";
     return '<div class="modal-backdrop" id="pin-backdrop">' +
       '<div class="modal-card">' +
-        '<h3>Shop staff sign-in</h3>' +
-        '<p class="sub">Enter the staff PIN to open the owner dashboard.</p>' +
+        '<h3>🧑‍🍳 Owner Login</h3>' +
+        '<p class="sub">Enter the PIN to manage ' + esc(state.shop.name) + '.</p>' +
         '<input type="password" inputmode="numeric" id="pin-input" placeholder="••••" autocomplete="off" value="' + esc(state.ui.pinInput) + '">' +
         (state.ui.pinError ? '<div class="err" style="text-align:center;margin-top:8px">' + esc(state.ui.pinError) + '</div>' : '') +
         '<div style="display:flex;gap:8px;margin-top:14px">' +
-          '<button class="btn btn-owner" data-full id="btn-pin-submit">Unlock</button>' +
+          '<button class="btn btn-owner" data-full id="btn-pin-submit">Log in</button>' +
           '<button class="btn btn-ghost" id="btn-pin-cancel">Cancel</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function renderCustLoginPanel(){
+    if(!state.ui.showCustLogin) return "";
+    return '<div class="modal-backdrop" id="cust-login-backdrop">' +
+      '<div class="modal-card" style="max-width:340px;text-align:left">' +
+        '<h3 style="text-align:center">👤 Customer Login</h3>' +
+        '<p class="sub" style="text-align:center">No password — just your name and number, so we know who\'s ordering.</p>' +
+        '<div class="field"><label>Your name</label><input type="text" id="in-cust-login-name" value="' + esc(state.ui.custLoginName) + '" placeholder="e.g. Asha Kulkarni"></div>' +
+        '<div class="field"><label>Mobile number</label><input type="tel" id="in-cust-login-phone" value="' + esc(state.ui.custLoginPhone) + '" placeholder="10-digit mobile"></div>' +
+        (state.ui.custLoginError ? '<div class="err">' + esc(state.ui.custLoginError) + '</div>' : '') +
+        '<div style="display:flex;gap:8px;margin-top:14px">' +
+          '<button class="btn btn-primary" data-full id="btn-cust-login-submit">Continue</button>' +
+          '<button class="btn btn-ghost" id="btn-cust-login-cancel">Cancel</button>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -1054,9 +1095,14 @@
     var openOrders = today.filter(isOpenOrder).sort(function(a,b){ return a.tokenSeq - b.tokenSeq; });
     var closedOrders = today.filter(function(o){ return !isOpenOrder(o); }).sort(function(a,b){ return b.updatedAt - a.updatedAt; });
 
-    var html = '<div class="orders-page-head">';
-    html += '<h2 class="display" style="font-size:20px;margin-bottom:2px">Today\'s orders</h2>';
-    html += '<p class="sub">' + fmtDate(todayStr()) + ' · ' + openOrders.length + ' open · ' + closedOrders.length + ' closed</p>';
+    var html = '<div class="orders-page-head" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">';
+    html += '<div><h2 class="display" style="font-size:20px;margin-bottom:2px">Today\'s orders</h2>';
+    html += '<p class="sub">' + fmtDate(todayStr()) + ' · ' + openOrders.length + ' open · ' + closedOrders.length + ' closed</p></div>';
+    html += '<div class="voice-toggle-box">' +
+      '<label class="switch"><input type="checkbox" id="tg-voice" ' + (state.shop.voiceAnnounce?'checked':'') + '><span class="track"></span></label>' +
+      '<span>' + (state.shop.voiceAnnounce ? '🔊 Voice alerts active' : '🔇 Voice alerts inactive') + '</span>' +
+      '<button class="btn btn-ghost btn-sm" id="btn-voice-test" type="button">Test</button>' +
+    '</div>';
     html += '</div>';
 
     if(openOrders.length === 0 && closedOrders.length === 0){
@@ -1242,7 +1288,7 @@
     html += '<p class="hint" style="margin-bottom:10px">Shown to customers on the hub selection card, so they can find you for pickup.</p>';
     html += '<hr style="border:none;border-top:1px solid var(--line);margin:16px 0">';
     html += '<div class="field"><label>Staff sign-in PIN</label><input type="text" inputmode="numeric" id="in-staff-pin" value="' + esc(state.shop.staffPin) + '" placeholder="e.g. 1234"></div>';
-    html += '<p class="hint" style="margin-bottom:10px">Whoever runs the counter uses this PIN behind the "Shop staff sign-in" link at the bottom of the customer app — change it from the default.</p>';
+    html += '<p class="hint" style="margin-bottom:10px">Whoever runs the counter uses this PIN behind the "Owner Login" link at the bottom of the customer app — change it from the default.</p>';
     html += '<button class="btn btn-ghost btn-sm" id="btn-lock-now" style="color:var(--red)">🔒 Lock owner view on this device</button>';
     html += '</div>';
 
@@ -1355,6 +1401,7 @@
 
   function onAppKeydown(e){
     if(e.key === "Enter" && e.target.id === "pin-input"){ submitPin(); }
+    if(e.key === "Enter" && (e.target.id === "in-cust-login-name" || e.target.id === "in-cust-login-phone")){ submitCustLogin(); }
   }
 
   function q(el, sel){ return el.closest ? el.closest(sel) : null; }
@@ -1366,6 +1413,10 @@
     if(t.id === "pin-backdrop"){ state.ui.showPin = false; persist(); render(); return; }
     if(t.id === "btn-pin-cancel"){ state.ui.showPin = false; persist(); render(); return; }
     if(t.id === "btn-pin-submit"){ submitPin(); return; }
+
+    if(t.id === "cust-login-backdrop"){ state.ui.showCustLogin = false; persist(); render(); return; }
+    if(t.id === "btn-cust-login-cancel"){ state.ui.showCustLogin = false; persist(); render(); return; }
+    if(t.id === "btn-cust-login-submit"){ submitCustLogin(); return; }
 
     var ownerTab;
     if((ownerTab = attr(t,"data-owner-tab"))){ state.ui.ownerTab = ownerTab; persist(); render(); return; }
@@ -1451,6 +1502,7 @@
       persist(); render(); return;
     }
     if(t.id === "btn-export-csv"){ exportOrdersCsv(); return; }
+    if(t.id === "btn-voice-test"){ speak("This is a test announcement for " + state.shop.name + "."); return; }
 
     if(t.id === "btn-lock-now"){
       state.ui.ownerUnlocked = false; state.ui.role = "customer"; state.ui.customerStep = "welcome";
@@ -1473,6 +1525,12 @@
     var t = e.target;
     if(t.id === "tg-open"){ state.shop.isOpenManual = t.checked; persist(); render(); toast(t.checked?"Hub marked open":"Hub marked closed"); return; }
     if(t.id === "tg-delivery"){ state.shop.deliveryEnabled = t.checked; if(!t.checked && state.ui.fulfilment==="DELIVERY") state.ui.fulfilment="PICKUP"; persist(); render(); toast(t.checked?"Home delivery enabled":"Home delivery disabled"); return; }
+    if(t.id === "tg-voice"){
+      state.shop.voiceAnnounce = t.checked; persist(); render();
+      toast(t.checked ? "Voice alerts on" : "Voice alerts off");
+      if(t.checked) speak("Voice alerts are on.");
+      return;
+    }
     if(t.id === "sel-special"){ state.shop.todaySpecialId = t.value; persist(); render(); return; }
     if(t.id === "in-open-time"){ state.shop.openTime = t.value; persist(); render(); return; }
     if(t.id === "in-close-time"){ state.shop.closeTime = t.value; persist(); render(); return; }
@@ -1500,6 +1558,8 @@
     else if(t.id === "in-shop-address-local"){ state.shop.addressLocal = t.value; persist(); }
     else if(t.id === "in-staff-pin"){ state.shop.staffPin = t.value; persist(); }
     else if(t.id === "pin-input"){ state.ui.pinInput = t.value; state.ui.pinError = ""; persist(); }
+    else if(t.id === "in-cust-login-name"){ state.ui.custLoginName = t.value; state.ui.custLoginError = ""; persist(); }
+    else if(t.id === "in-cust-login-phone"){ state.ui.custLoginPhone = t.value; state.ui.custLoginError = ""; persist(); }
     else if(t.id === "in-new-item-name"){ state.ui.newItemName = t.value; persist(); }
     else if(t.id === "in-new-item-local"){ state.ui.newItemLocal = t.value; persist(); }
     else if(t.id === "in-new-item-price"){ state.ui.newItemPrice = t.value; persist(); }
@@ -1517,6 +1577,7 @@
     if(!/^\d{10}$/.test(phone.replace(/\D/g,""))){ showErr("Please enter a valid 10-digit mobile number."); return; }
     var address = (state.ui.address||"").trim();
     if(state.ui.fulfilment === "DELIVERY" && !address){ showErr("Please enter a delivery address."); return; }
+    state.ui.customerLoggedIn = true;
 
     var seq = allocateToken();
     var order = {
@@ -1570,6 +1631,49 @@
   }
   function fmtTime(ts){ return new Date(ts).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}); }
 
+  /* ---------- Voice announcements for new orders ---------- */
+  function speak(text){
+    if(!(window.speechSynthesis && window.SpeechSynthesisUtterance)) return;
+    try{
+      window.speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.95; u.pitch = 1;
+      window.speechSynthesis.speak(u);
+    }catch(e){}
+  }
+  function announceOrder(o){
+    var itemsText = o.items.map(function(l){ return l.qty + " " + l.name; }).join(", ");
+    speak("New order. Token " + o.tokenDisplay.replace(/-/g," ") + ". " + itemsText + ". " +
+      (o.fulfilment === "DELIVERY" ? "Home delivery." : "Pickup."));
+  }
+  // Only the owner's tab cares; only orders placed since this device last checked get read out,
+  // so re-opening the dashboard never re-announces the whole day's history.
+  function checkNewOrdersAndAnnounce(){
+    if(state.ui.role !== "owner" || !state.shop.voiceAnnounce) return;
+    var last = state.ui.lastSeenOrderTs || 0;
+    var fresh = state.orders.filter(function(o){ return o.createdAt > last && o.serviceDate === todayStr() && o.status === "PENDING"; });
+    if(fresh.length === 0) return;
+    fresh.sort(function(a,b){ return a.createdAt - b.createdAt; }).forEach(announceOrder);
+    state.ui.lastSeenOrderTs = Date.now();
+    persist();
+  }
+  // Merge shared shop/order data written by another tab of the same browser, without touching
+  // this tab's own session (role, unlock state, cart, in-progress form fields).
+  function mergeIncomingSharedState(incoming){
+    state.hub = incoming.hub || state.hub;
+    state.shop = Object.assign({}, DEFAULT_STATE.shop, incoming.shop || {});
+    state.menu = (incoming.menu && incoming.menu.length) ? incoming.menu : state.menu;
+    state.counter = incoming.counter || state.counter;
+    state.orders = incoming.orders || state.orders;
+  }
+  window.addEventListener("storage", function(e){
+    if(e.key !== STORE_KEY || !e.newValue) return;
+    var incoming;
+    try{ incoming = JSON.parse(e.newValue); }catch(err){ return; }
+    mergeIncomingSharedState(incoming);
+    render(); // render() itself runs the new-order check, so any fresh order gets announced here
+  });
+
   function submitPin(){
     var entered = (state.ui.pinInput||"").trim();
     var expected = (state.shop.staffPin||"1234").trim();
@@ -1588,8 +1692,21 @@
     }
   }
 
+  function submitCustLogin(){
+    var name = (state.ui.custLoginName||"").trim();
+    var phone = (state.ui.custLoginPhone||"").trim();
+    if(!name){ state.ui.custLoginError = "Please enter your name."; persist(); render(); return; }
+    if(!/^\d{10}$/.test(phone.replace(/\D/g,""))){ state.ui.custLoginError = "Please enter a valid 10-digit mobile number."; persist(); render(); return; }
+    state.ui.name = name;
+    state.ui.phone = phone.replace(/\D/g,"");
+    state.ui.customerLoggedIn = true;
+    state.ui.showCustLogin = false;
+    state.ui.custLoginError = "";
+    persist(); render(); toast("Welcome, " + name.split(" ")[0] + "!");
+  }
+
   /* ============ Portal access ============
-     The owner dashboard is reached only through the "Shop staff sign-in" link
+     The owner dashboard is reached only through the "Owner Login" link
      in the footer, gated by a PIN (set in Owner → Contact, default 1234).
      Customers on the plain link never see any control that leads there. */
   document.getElementById("btn-open-staff").addEventListener("click", function(){
@@ -1603,7 +1720,18 @@
     if(r){ state.ui.role = r; persist(); render(); return; }
     if(t.id === "btn-lock-staff" || attr(t,"data-lock-staff")){
       state.ui.ownerUnlocked = false; state.ui.role = "customer"; state.ui.customerStep = "welcome";
-      persist(); render(); toast("Owner view locked");
+      persist(); render(); toast("Owner view locked"); return;
+    }
+    if(t.id === "btn-cust-login"){
+      state.ui.showCustLogin = true; state.ui.custLoginError = "";
+      state.ui.custLoginName = state.ui.name; state.ui.custLoginPhone = state.ui.phone;
+      persist(); render();
+      setTimeout(function(){ var el = document.getElementById("in-cust-login-name"); if(el) el.focus(); }, 30);
+      return;
+    }
+    if(t.id === "btn-cust-logout"){
+      state.ui.customerLoggedIn = false; state.ui.name = ""; state.ui.phone = "";
+      persist(); render(); toast("Logged out");
     }
   });
 
