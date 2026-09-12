@@ -762,7 +762,7 @@
     if(o.status === "READY") return "Your token " + o.tokenDisplay + " is READY at " + state.shop.name + "! " +
       (o.fulfilment === "DELIVERY" ? "Your delivery is on the way." : "Please collect at the counter.") + " Amount due: " + money(o.total) + ".";
     if(o.status === "REJECTED") return "Sorry, your order " + o.tokenDisplay + " at " + state.shop.name + " could not be accepted" + (o.rejectReason ? (": " + o.rejectReason) : ".");
-    if(o.status === "COMPLETED") return "Thanks for your order " + o.tokenDisplay + "! See you again at " + state.shop.name + ".";
+    if(o.status === "COMPLETED") return "Your order " + o.tokenDisplay + " is completed! Please collect at " + state.shop.name + ".";
     return "Update on your order " + o.tokenDisplay + " at " + state.shop.name + ": " + o.status;
   }
 
