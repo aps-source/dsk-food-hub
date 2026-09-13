@@ -564,6 +564,7 @@
       ownerWhatsapp: "",
       upiId: "",
       upiPayeeName: "",
+      qrLogoDataUrl: "",
       staffPin: "1234",
       openTime1: "09:00",
       closeTime1: "13:00",
@@ -840,7 +841,54 @@
     if(!img || !window.QRious) return;
     var uri = img.getAttribute("data-uri");
     if(!uri) return;
-    try{ new QRious({ element: img, value: uri, size: 200, level: "M" }); }catch(e){}
+    var logo = state.shop.qrLogoDataUrl;
+    if(!logo){
+      try{ new QRious({ element: img, value: uri, size: 200, level: "M" }); }catch(e){}
+      return;
+    }
+    // With a logo, render to an offscreen canvas at the highest error-correction level
+    // (tolerates ~30% obstruction) before overlaying the image, so the code still scans.
+    try{
+      var canvas = document.createElement("canvas");
+      new QRious({ element: canvas, value: uri, size: 200, level: "H" });
+      var ctx = canvas.getContext("2d");
+      var logoImg = new Image();
+      var finish = function(){
+        var logoSize = Math.round(canvas.width * 0.22);
+        var pad = 6;
+        var x = (canvas.width - logoSize) / 2, y = (canvas.height - logoSize) / 2;
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(x - pad, y - pad, logoSize + pad*2, logoSize + pad*2);
+        try{ ctx.drawImage(logoImg, x, y, logoSize, logoSize); }catch(e){}
+        img.src = canvas.toDataURL("image/png");
+      };
+      logoImg.onload = finish;
+      logoImg.onerror = function(){ img.src = canvas.toDataURL("image/png"); };
+      logoImg.src = logo;
+    }catch(e){}
+  }
+  // Downscales/crops an uploaded photo to a small square before storing it, so the shop
+  // logo saved to the database stays a few KB rather than a full-size phone photo.
+  function processQrLogoFile(file){
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(e){
+      var img = new Image();
+      img.onload = function(){
+        var size = 120;
+        var canvas = document.createElement("canvas");
+        canvas.width = size; canvas.height = size;
+        var ctx = canvas.getContext("2d");
+        var srcSize = Math.min(img.width, img.height);
+        var sx = (img.width - srcSize) / 2, sy = (img.height - srcSize) / 2;
+        ctx.drawImage(img, sx, sy, srcSize, srcSize, 0, 0, size, size);
+        updateShop({ qrLogoDataUrl: canvas.toDataURL("image/jpeg", 0.85) });
+        toast("QR logo saved");
+      };
+      img.onerror = function(){ toast("Couldn't read that image — try a different file."); };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
   }
   function orderSummaryText(o){
     var lines = o.items.map(function(l){ return "- " + l.qty + "x " + l.name + " (" + money(l.price) + ")"; }).join("\n");
@@ -1608,6 +1656,16 @@
     html += '<div class="field"><label>UPI ID (VPA)</label><input type="text" id="in-upi-id" value="' + esc(state.shop.upiId) + '" placeholder="e.g. shopname@okhdfcbank"></div>';
     html += '<div class="field"><label>Payee name shown to customer (optional)</label><input type="text" id="in-upi-payee" value="' + esc(state.shop.upiPayeeName) + '" placeholder="' + esc(state.shop.name) + '"></div>';
     if(!state.shop.upiId) html += '<p class="hint">Leave UPI ID blank to hide this option and keep pay-at-hub only.</p>';
+    html += '<hr style="border:none;border-top:1px solid var(--line);margin:16px 0">';
+    html += '<label>QR code logo (optional)</label>';
+    if(state.shop.qrLogoDataUrl){
+      html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">';
+      html += '<img src="' + state.shop.qrLogoDataUrl + '" alt="QR logo" style="width:56px;height:56px;border-radius:8px;object-fit:cover;border:1px solid var(--line)">';
+      html += '<button class="btn btn-ghost btn-sm" id="btn-remove-qr-logo" style="color:var(--red)">Remove logo</button>';
+      html += '</div>';
+    }
+    html += '<input type="file" accept="image/*" id="in-qr-logo">';
+    html += '<p class="hint" style="margin-top:8px">Shown in the center of the customer\'s UPI QR code — your shop logo works well. Keep it simple; a busy image can make the code harder for some phones to scan.</p>';
     html += '</div>';
 
     html += '<div class="card" style="text-align:center">';
@@ -1893,6 +1951,7 @@
     var bestPeriod = attr(t,"data-best-period");
     if(bestPeriod !== null){ state.ui.bestSellerPeriod = bestPeriod; persist(); render(); return; }
     if(t.id === "btn-export-csv"){ exportOrdersCsv(); return; }
+    if(t.id === "btn-remove-qr-logo"){ updateShop({ qrLogoDataUrl: "" }); toast("QR logo removed"); return; }
     if(t.id === "btn-voice-test"){ speak("This is a test announcement for " + state.shop.name + "."); return; }
 
     if(t.id === "btn-lock-now"){
@@ -1933,6 +1992,11 @@
     if(t.id === "in-avg-prep"){
       var prepVal = parseInt(t.value,10);
       updateShop({ avgPrepMinutes: (isNaN(prepVal) || prepVal < 1) ? 8 : prepVal });
+      return;
+    }
+    if(t.id === "in-qr-logo"){
+      var logoFile = t.files && t.files[0];
+      if(logoFile) processQrLogoFile(logoFile);
       return;
     }
     // Free-text shop fields sync on blur (change), not every keystroke — avoids a cloud
