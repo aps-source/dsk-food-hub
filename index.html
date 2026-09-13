@@ -848,11 +848,20 @@
     }
     // With a logo, render to an offscreen canvas at the highest error-correction level
     // (tolerates ~30% obstruction) before overlaying the image, so the code still scans.
+    // Loading the logo is asynchronous even for a data: URL — if another Firebase update
+    // triggers a re-render in that gap, the original <img> node gets replaced, so we
+    // re-fetch the live element by id right before writing instead of trusting the
+    // closured reference (which may by then be detached and invisible).
     try{
       var canvas = document.createElement("canvas");
       new QRious({ element: canvas, value: uri, size: 200, level: "H" });
       var ctx = canvas.getContext("2d");
       var logoImg = new Image();
+      var paint = function(){
+        var dataUrl = canvas.toDataURL("image/png");
+        var liveImg = document.getElementById("upi-qr-img");
+        if(liveImg && liveImg.getAttribute("data-uri") === uri) liveImg.src = dataUrl;
+      };
       var finish = function(){
         var logoSize = Math.round(canvas.width * 0.22);
         var pad = 6;
@@ -860,10 +869,10 @@
         ctx.fillStyle = "#fff";
         ctx.fillRect(x - pad, y - pad, logoSize + pad*2, logoSize + pad*2);
         try{ ctx.drawImage(logoImg, x, y, logoSize, logoSize); }catch(e){}
-        img.src = canvas.toDataURL("image/png");
+        paint();
       };
       logoImg.onload = finish;
-      logoImg.onerror = function(){ img.src = canvas.toDataURL("image/png"); };
+      logoImg.onerror = paint;
       logoImg.src = logo;
     }catch(e){}
   }
