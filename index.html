@@ -590,7 +590,7 @@
           activeOrderId:null, rejecting:null, resetArm:false,
           ownerTab:"orders", newItemName:"", newItemLocal:"", newItemPrice:"", newItemOccasion:"",
           customerLoggedIn:false, showCustLogin:false, custLoginName:"", custLoginPhone:"", custLoginError:"",
-          lastSeenOrderTs: null, bestSellerPeriod: "today", reviewDraftRating: 0, reviewDraftComment: "",
+          lastSeenOrderTs: null, lastSeenCustomerActionTs: null, bestSellerPeriod: "today", reviewDraftRating: 0, reviewDraftComment: "",
           editingOrderId: null, cancelling: null }
   };
 
@@ -623,6 +623,7 @@
     state.ui.showCustLogin = false; state.ui.custLoginError = "";
     // Start the "new order" clock at first load so pre-existing orders never get announced.
     if(state.ui.lastSeenOrderTs == null) state.ui.lastSeenOrderTs = nowMs();
+    if(state.ui.lastSeenCustomerActionTs == null) state.ui.lastSeenCustomerActionTs = nowMs();
   })();
   function persist(){
     try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){}
@@ -2088,7 +2089,9 @@
         address: state.ui.fulfilment==="DELIVERY" ? address : "",
         notes: (state.ui.notes||"").trim(),
         name: name, phone: phone,
-        updatedAt: nowMs()
+        updatedAt: nowMs(),
+        customerActionAt: nowMs(),
+        customerActionType: "EDITED"
       });
       state.ui.editingOrderId = null;
       state.ui.cart = {};
@@ -2159,7 +2162,7 @@
     var o = state.orders.find(function(x){ return x.id === id; });
     if(!o) return;
     var now = nowMs();
-    patchOrderCloud(id, { status: "CANCELLED", updatedAt: now, ["stageTimes/CANCELLED"]: now });
+    patchOrderCloud(id, { status: "CANCELLED", updatedAt: now, ["stageTimes/CANCELLED"]: now, customerActionAt: now, customerActionType: "CANCELLED" });
     state.ui.cancelling = null;
     render();
     toast(o.tokenDisplay + " cancelled");
@@ -2204,15 +2207,36 @@
     speak("New order. Token " + o.tokenDisplay.replace(/-/g," ") + ". " + itemsText + ". " +
       (o.fulfilment === "DELIVERY" ? "Home delivery." : "Pickup."));
   }
-  // Only the owner's tab cares; only orders placed since this device last checked get read out,
-  // so re-opening the dashboard never re-announces the whole day's history.
+  function announceOrderAction(o){
+    var token = o.tokenDisplay.replace(/-/g," ");
+    if(o.customerActionType === "CANCELLED"){
+      speak("Order " + token + " was cancelled by the customer.");
+    } else {
+      var itemsText = o.items.map(function(l){ return l.qty + " " + l.name; }).join(", ");
+      speak("Order " + token + " was updated by the customer. Now: " + itemsText + ".");
+    }
+  }
+  // Only the owner's tab cares; only orders/actions since this device last checked get read
+  // out, so re-opening the dashboard never re-announces the whole day's history. New orders
+  // and customer-made changes (edits, cancellations) are tracked on separate cursors since
+  // an edit/cancel doesn't touch createdAt.
   function checkNewOrdersAndAnnounce(){
     if(state.ui.role !== "owner" || !state.shop.voiceAnnounce) return;
-    var last = state.ui.lastSeenOrderTs || 0;
-    var fresh = state.orders.filter(function(o){ return o.createdAt > last && o.serviceDate === todayStr() && o.status === "PENDING"; });
-    if(fresh.length === 0) return;
-    fresh.sort(function(a,b){ return a.createdAt - b.createdAt; }).forEach(announceOrder);
+    var lastNew = state.ui.lastSeenOrderTs || 0;
+    var freshNew = state.orders.filter(function(o){ return o.createdAt > lastNew && o.serviceDate === todayStr() && o.status === "PENDING"; });
+
+    var lastAction = state.ui.lastSeenCustomerActionTs || 0;
+    var freshActions = state.orders.filter(function(o){ return o.customerActionAt && o.customerActionAt > lastAction && o.serviceDate === todayStr(); });
+
+    if(freshNew.length === 0 && freshActions.length === 0) return;
+
+    var events = [];
+    freshNew.forEach(function(o){ events.push({ ts: o.createdAt, run: function(){ announceOrder(o); } }); });
+    freshActions.forEach(function(o){ events.push({ ts: o.customerActionAt, run: function(){ announceOrderAction(o); } }); });
+    events.sort(function(a,b){ return a.ts - b.ts; }).forEach(function(e){ e.run(); });
+
     state.ui.lastSeenOrderTs = nowMs();
+    state.ui.lastSeenCustomerActionTs = nowMs();
     persist();
   }
   // Merge shared shop/order data written by another tab of the same browser, without touching
