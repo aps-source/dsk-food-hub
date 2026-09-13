@@ -1877,8 +1877,15 @@
     if(t.id === "btn-to-hubs"){ state.ui.customerStep = "hubs"; persist(); render(); return; }
     if(attr(t,"data-open-hub")){ state.ui.customerStep = "shop"; persist(); render(); return; }
 
-    if((id = attr(t,"data-add"))){ state.ui.cart[id] = (state.ui.cart[id]||0)+1; persist(); render(); return; }
-    if((id = attr(t,"data-inc"))){ state.ui.cart[id] = (state.ui.cart[id]||0)+1; persist(); render(); return; }
+    var MAX_QTY_PER_ITEM = 20;
+    if((id = attr(t,"data-add"))){
+      if((state.ui.cart[id]||0) >= MAX_QTY_PER_ITEM){ toast("Max " + MAX_QTY_PER_ITEM + " per item — call the shop for bulk orders."); return; }
+      state.ui.cart[id] = (state.ui.cart[id]||0)+1; persist(); render(); return;
+    }
+    if((id = attr(t,"data-inc"))){
+      if((state.ui.cart[id]||0) >= MAX_QTY_PER_ITEM){ toast("Max " + MAX_QTY_PER_ITEM + " per item — call the shop for bulk orders."); return; }
+      state.ui.cart[id] = (state.ui.cart[id]||0)+1; persist(); render(); return;
+    }
     if((id = attr(t,"data-dec"))){ state.ui.cart[id] = Math.max(0,(state.ui.cart[id]||0)-1); persist(); render(); return; }
     if((id = attr(t,"data-remove"))){ delete state.ui.cart[id]; persist(); render(); return; }
 
@@ -2073,6 +2080,7 @@
     if(!/^\d{10}$/.test(phone.replace(/\D/g,""))){ showErr("Please enter a valid 10-digit mobile number."); return; }
     var address = (state.ui.address||"").trim();
     if(state.ui.fulfilment === "DELIVERY" && !address){ showErr("Please enter a delivery address."); return; }
+    if(cartTotal(lines) > 50000){ showErr("This order total looks unusually high — please call the shop directly for bulk orders."); return; }
     state.ui.customerLoggedIn = true;
 
     if(state.ui.editingOrderId){
