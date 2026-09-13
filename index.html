@@ -181,6 +181,12 @@
   .section-title{ font-size:11.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-soft); font-weight:700; margin: 0 0 10px; }
 
   .accent-customer{ box-shadow: inset 3px 0 0 var(--gold), var(--shadow); }
+  .shop-quick-actions{ display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 14px; }
+  .edit-order-banner{
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    background:var(--gold-soft); border-radius:12px; padding:14px; margin-bottom:16px;
+  }
+  .cancel-confirm{ background:var(--red-soft); border-radius:10px; padding:12px; margin-top:8px; }
   .accent-owner{ box-shadow: inset 3px 0 0 var(--teal), var(--shadow); }
 
   /* ============ Buttons / inputs ============ */
@@ -340,6 +346,13 @@
   }
   .upi-app-btn:hover{ border-color:var(--gold); }
 
+  .review-box{ text-align:center; background:var(--surface-2); border-radius:12px; padding:16px; margin-top:14px; }
+  .review-box-head{ font-weight:800; font-size:13.5px; margin-bottom:10px; }
+  .star-row{ display:flex; justify-content:center; gap:4px; margin-bottom:10px; }
+  .star-btn{ background:none; border:none; font-size:28px; line-height:1; color:var(--line); cursor:pointer; padding:2px; }
+  .star-btn.on{ color:var(--gold); }
+  .review-box textarea{ margin-bottom:10px; }
+
   /* ============ Owner: stat tiles ============ */
   .stat-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
   @media (min-width:640px){ .stat-grid{ grid-template-columns:repeat(4,1fr); } }
@@ -450,6 +463,7 @@
   .hub-tile .local{ margin:0; color:var(--ink-soft); font-size:12px; }
   .hub-tile-meta{ font-size:12.5px; color:var(--ink-soft); }
   .hub-tile-hours{ font-size:12px; color:var(--teal); font-weight:600; }
+  .rating-badge{ font-size:11.5px; font-weight:800; color:var(--gold-ink); background:var(--gold-soft); padding:3px 9px; border-radius:999px; }
   .hub-tile-address{ font-size:11.5px; color:var(--ink-soft); line-height:1.4; }
   .hub-tile-address-local{ font-size:10.5px; color:var(--ink-soft); opacity:.85; line-height:1.4; margin-top:-4px; }
   .hub-tile-special{ font-size:12px; color:var(--gold-ink); font-weight:700; }
@@ -536,6 +550,7 @@
       local: "श्री स्वामी समर्थ भाकरी केंद्र",
       address: "Survey No. 126, Shop No. H-17, Bhaskara, D.S.K. Vishwa, Pune - 411041",
       addressLocal: "पत्ता - सर्व्हे नं. १२६, शॉप नं. एच-१७, भास्करा डि.एस.के. विश्व, पुणे-४११०४१",
+      mapsUrl: "",
       tokenPrefix: "SSB",
       isOpenManual: true,
       closureReason: "",
@@ -568,12 +583,14 @@
     ],
     counter: { date: todayStr(), next: 1 },
     orders: [],
+    reviews: [],
     ui: { role:"customer", ownerUnlocked:false, showPin:false, pinInput:"", pinError:"",
           customerStep:"welcome", cart:{}, fulfilment:"PICKUP", name:"", phone:"", address:"", notes:"",
           activeOrderId:null, rejecting:null, resetArm:false,
           ownerTab:"orders", newItemName:"", newItemLocal:"", newItemPrice:"", newItemOccasion:"",
           customerLoggedIn:false, showCustLogin:false, custLoginName:"", custLoginPhone:"", custLoginError:"",
-          lastSeenOrderTs: null }
+          lastSeenOrderTs: null, bestSellerPeriod: "today", reviewDraftRating: 0, reviewDraftComment: "",
+          editingOrderId: null, cancelling: null }
   };
 
   function load(){
@@ -587,6 +604,7 @@
       s.menu = s.menu && s.menu.length ? s.menu : DEFAULT_STATE.menu;
       s.counter = s.counter || DEFAULT_STATE.counter;
       s.orders = s.orders || [];
+      s.reviews = s.reviews || [];
       s.ui = Object.assign({}, DEFAULT_STATE.ui, s.ui || {});
       return s;
     }catch(e){ return JSON.parse(JSON.stringify(DEFAULT_STATE)); }
@@ -776,6 +794,16 @@
     if(!d) return "";
     if(d.length === 10) return "91" + d;
     return d;
+  }
+  function telLink(raw){
+    var n = toWaNumber(raw);
+    return n ? ("tel:+" + n) : "";
+  }
+  function mapsLink(){
+    var custom = (state.shop.mapsUrl||"").trim();
+    if(custom) return custom;
+    var q = (state.shop.address||state.shop.name||"").trim();
+    return q ? ("https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q)) : "";
   }
   function waLink(rawNumber, text){
     var n = toWaNumber(rawNumber);
@@ -1062,12 +1090,15 @@
       timingsBits.push("Closed " + weeklyOff.map(function(d){ return WEEKDAY_SHORT[d]; }).join("/"));
     }
 
+    var ratingSummary = shopRatingSummary();
+    var ratingBadgeHtml = ratingSummary ? ('<span class="rating-badge">⭐ ' + ratingSummary.avg.toFixed(1) + ' (' + ratingSummary.count + ')</span>') : '';
+
     var html = '<button class="crumb" id="btn-to-welcome">← DSK Food Hub</button>';
     html += '<h2 class="display" style="font-size:22px;margin-bottom:2px">Choose a food hub</h2>';
     html += '<p class="sub" style="margin-bottom:6px">One hub live so far — more will appear here as they join.</p>';
     html += '<div class="hub-grid">';
     html += '<button class="hub-tile" data-open-hub="1">' +
-      '<div>' + badgeForStatus(cs) + '</div>' +
+      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' + badgeForStatus(cs) + ratingBadgeHtml + '</div>' +
       '<h3>' + esc(state.shop.name) + '</h3>' +
       '<p class="local">' + esc(state.shop.local) + '</p>' +
       (state.shop.address ? ('<div class="hub-tile-address">📍 ' + esc(state.shop.address) + '</div>') : '') +
@@ -1092,8 +1123,14 @@
 
     html += '<div>';
 
-    if(order && order.status !== "COMPLETED" && order.status !== "REJECTED" && order.status !== "CANCELLED"){
-      html += renderTicket(order) ;
+    var isEditingThisOrder = order && state.ui.editingOrderId === order.id;
+    if(isEditingThisOrder){
+      html += '<div class="edit-order-banner">';
+      html += '<div><strong>Editing order ' + esc(order.tokenDisplay) + '</strong><div class="hint">Change items below, then save — this updates your existing order, it won\'t create a new one.</div></div>';
+      html += '<button class="btn btn-ghost btn-sm" id="btn-cancel-edit">Cancel editing</button>';
+      html += '</div>';
+    } else if(order && order.status !== "COMPLETED" && order.status !== "REJECTED" && order.status !== "CANCELLED"){
+      html += renderTicket(order);
     } else if(order){
       html += renderTicket(order);
       html += '<div style="margin-top:12px"><button class="btn btn-primary" id="btn-new-order">Place another order</button></div>';
@@ -1102,6 +1139,13 @@
     html += '<div class="card accent-customer">';
     html += '<h2 class="display">' + esc(state.shop.name) + '</h2>';
     html += '<p class="sub">' + esc(state.shop.local) + '</p>';
+    var custCallLink = telLink(state.shop.ownerWhatsapp), custMapsLink = mapsLink();
+    if(custCallLink || custMapsLink){
+      html += '<div class="shop-quick-actions">';
+      if(custCallLink) html += '<a class="btn btn-sm" href="' + esc(custCallLink) + '" style="text-decoration:none">📞 Call shop</a>';
+      if(custMapsLink) html += '<a class="btn btn-sm" href="' + esc(custMapsLink) + '" target="_blank" rel="noopener" style="text-decoration:none">📍 Get directions</a>';
+      html += '</div>';
+    }
     if(!openForOrders){
       html += '<div style="background:var(--surface-2);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13.5px;color:var(--ink-soft)">Menu is browsable, but ordering opens again once the hub reopens.</div>';
     }
@@ -1201,6 +1245,36 @@
         html += '<div class="hint" style="margin-top:12px">The shop hasn\'t added a WhatsApp number yet, so this can\'t be sent automatically — ask them to add one under Owner → Contact.</div>';
       }
     }
+    var ticketCallLink = telLink(state.shop.ownerWhatsapp);
+    if(ticketCallLink) html += '<a class="btn btn-sm btn-ghost" href="' + esc(ticketCallLink) + '" style="margin-top:8px;text-decoration:none">📞 Call shop</a>';
+
+    var canManage = order.status === "PENDING" || order.status === "ACCEPTED";
+    if(canManage){
+      html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">';
+      if(order.status === "PENDING") html += '<button class="btn btn-sm" data-edit-order="' + order.id + '">✏️ Edit order</button>';
+      html += '<button class="btn btn-sm btn-ghost" data-start-cancel="' + order.id + '" style="color:var(--red)">Cancel order</button>';
+      html += '</div>';
+    }
+    if(state.ui.cancelling === order.id){
+      html += '<div class="cancel-confirm"><span class="hint">Cancel order ' + esc(order.tokenDisplay) + '? This can\'t be undone.</span>' +
+        '<div style="display:flex;gap:8px;margin-top:8px">' +
+        '<button class="btn btn-danger btn-sm" data-confirm-cancel="' + order.id + '">Yes, cancel</button>' +
+        '<button class="btn btn-ghost btn-sm" id="btn-dismiss-cancel">No, keep it</button></div></div>';
+    }
+
+    if(order.status === "COMPLETED" && !order.reviewed){
+      var draftRating = state.ui.reviewDraftRating || 0;
+      html += '<div class="review-box">';
+      html += '<div class="review-box-head">⭐ Rate your experience</div>';
+      html += '<div class="star-row" data-order="' + order.id + '">';
+      for(var si=1; si<=5; si++){
+        html += '<button type="button" class="star-btn' + (si<=draftRating ? ' on' : '') + '" data-star="' + si + '">★</button>';
+      }
+      html += '</div>';
+      html += '<textarea id="in-review-comment" placeholder="Anything you\'d like to share? (optional)">' + esc(state.ui.reviewDraftComment) + '</textarea>';
+      html += '<button class="btn btn-owner btn-sm" data-full data-submit-review="' + order.id + '">Submit feedback</button>';
+      html += '</div>';
+    }
     html += '</div></div>';
     return html;
   }
@@ -1211,8 +1285,11 @@
     var u = state.ui;
     var deliveryOn = state.shop.deliveryEnabled;
 
+    var editing = !!state.ui.editingOrderId;
+    var editingOrder = editing ? state.orders.find(function(o){ return o.id === state.ui.editingOrderId; }) : null;
+
     var html = '<div class="card accent-customer">';
-    html += '<h2>Your order</h2>';
+    html += '<h2>' + (editing ? "Update your order" : "Your order") + '</h2>';
     if(lines.length === 0){
       html += '<div class="empty-note">Add items from the menu to start an order.</div>';
     } else {
@@ -1234,9 +1311,9 @@
       }
       html += '<div class="field"><label>Notes (optional)</label><input type="text" id="in-notes" value="' + esc(u.notes) + '" placeholder="e.g. less spicy, no ghee"></div>';
       html += '<div id="cart-err" class="err" style="display:none"></div>';
-      html += '<button class="btn btn-primary" data-full id="btn-place" ' + (openForOrders?'':'disabled') + '>Place order — pay at hub</button>';
+      html += '<button class="btn btn-primary" data-full id="btn-place" ' + (openForOrders?'':'disabled') + '>' + (editing ? "Save changes" : "Place order — pay at hub") + '</button>';
       if(!openForOrders) html += '<div class="hint" style="margin-top:8px;text-align:center">Ordering opens once the hub is open.</div>';
-      html += '<div class="hint" style="margin-top:8px;text-align:center">No online payment — settle ' + money(total) + ' at the hub.</div>';
+      html += '<div class="hint" style="margin-top:8px;text-align:center">' + (editing ? "Updates order " + esc(editingOrder ? editingOrder.tokenDisplay : "") : "No online payment — settle " + money(total) + " at the hub.") + '</div>';
       html += '</div>';
     }
     html += '</div>';
@@ -1247,7 +1324,11 @@
       html += '<div class="card">';
       html += '<div class="section-title">Orders from this device</div>';
       mine.slice(0,6).forEach(function(o){
-        html += '<div class="kv-row"><span class="k">' + esc(o.tokenDisplay) + ' · ' + fmtDate(o.serviceDate) + '</span><span class="v"><span class="status-pill st-' + o.status + '" style="font-size:10px">' + o.status + '</span></span></div>';
+        var isCurrent = o.id === state.ui.activeOrderId;
+        html += '<div class="kv-row"><span class="k">' + esc(o.tokenDisplay) + ' · ' + fmtDate(o.serviceDate) + '</span>' +
+          '<span class="v" style="display:flex;align-items:center;gap:8px"><span class="status-pill st-' + o.status + '" style="font-size:10px">' + o.status + '</span>' +
+          (isCurrent ? '' : '<button class="btn btn-ghost btn-sm" data-view-order="' + o.id + '" style="padding:3px 9px">View</button>') +
+          '</span></div>';
       });
       html += '</div>';
     }
@@ -1353,14 +1434,6 @@
           ' <span class="hint">(' + (o.fulfilment==="DELIVERY"?"delivery":"pickup") + ')</span></span>' +
           '<span class="v">' + money(o.total) + ' <span class="status-pill st-' + o.status + '" style="font-size:9.5px;margin-left:4px">' + o.status + '</span></span></div>';
       });
-
-      var itemSales = itemSalesToday();
-      if(itemSales.length){
-        html += '<div class="section-title" style="margin-top:18px">Item sales today</div>';
-        itemSales.forEach(function(row, i){
-          html += '<div class="kv-row"><span class="k">' + (i===0 ? '🏆 ' : '') + esc(row.name) + ' <span class="hint">× ' + row.qty + '</span></span><span class="v">' + money(row.revenue) + '</span></div>';
-        });
-      }
     }
     var waSummary = waLink(state.shop.ownerWhatsapp, dailySummaryText());
     html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">';
@@ -1372,6 +1445,39 @@
     html += '<button class="btn btn-sm" id="btn-export-csv">⬇️ Download as Excel (CSV)</button>';
     html += '</div>';
     html += '<p class="hint" style="margin-top:8px">WhatsApp sends the summary as text you tap to send — it can\'t attach the CSV automatically. Download the file here, then attach it to the WhatsApp chat yourself if you want the spreadsheet sent too.</p>';
+    html += '</div>';
+
+    // Best sellers
+    html += '<div class="card accent-owner">';
+    html += '<h2>Best sellers</h2><p class="sub">Top items by quantity sold, excluding rejected/cancelled orders.</p>';
+    var periods = [["today","Today"],["week","This week"],["month","This month"],["all","All-time"]];
+    html += '<div class="chip-row">';
+    periods.forEach(function(p){
+      html += '<button type="button" class="chip" data-best-period="' + p[0] + '" aria-pressed="' + (state.ui.bestSellerPeriod===p[0]) + '">' + p[1] + '</button>';
+    });
+    html += '</div>';
+    var bestSellers = itemSalesForPeriod(state.ui.bestSellerPeriod);
+    if(bestSellers.length === 0){
+      html += '<div class="empty-state" style="padding:16px 10px"><div class="big">🏆</div>No sales in this period yet.</div>';
+    } else {
+      bestSellers.slice(0,10).forEach(function(row, i){
+        html += '<div class="kv-row"><span class="k">' + (i===0 ? '🏆 ' : '') + esc(row.name) + ' <span class="hint">× ' + row.qty + '</span></span><span class="v">' + money(row.revenue) + '</span></div>';
+      });
+    }
+    html += '</div>';
+
+    // Reviews
+    html += '<div class="card accent-owner">';
+    html += '<h2>Reviews</h2><p class="sub">Customer feedback after order pickup/delivery, shown to customers as your overall rating.</p>';
+    var ratingSummary = shopRatingSummary();
+    if(!ratingSummary){
+      html += '<div class="empty-state" style="padding:16px 10px"><div class="big">⭐</div>No reviews yet.</div>';
+    } else {
+      html += '<div class="kv-row"><span class="k">Average rating</span><span class="v">⭐ ' + ratingSummary.avg.toFixed(1) + ' · ' + ratingSummary.count + ' review' + (ratingSummary.count===1?'':'s') + '</span></div>';
+      state.reviews.slice().sort(function(a,b){ return b.createdAt - a.createdAt; }).slice(0,8).forEach(function(r){
+        html += '<div class="kv-row" style="align-items:flex-start"><span class="k">' + '★'.repeat(r.rating) + '<span style="color:var(--line)">' + '★'.repeat(5-r.rating) + '</span> ' + esc(r.name) + ' <span class="hint">(' + esc(r.tokenDisplay) + ')</span>' + (r.comment ? ('<br><span class="hint">"' + esc(r.comment) + '"</span>') : '') + '</span></div>';
+      });
+    }
     html += '</div>';
 
     // Today's special
@@ -1487,7 +1593,8 @@
     html += '<div class="field"><label>Shop WhatsApp number</label><input type="tel" id="in-owner-whatsapp" value="' + esc(state.shop.ownerWhatsapp) + '" placeholder="10-digit mobile number"></div>';
     html += '<div class="field"><label>Address</label><textarea id="in-shop-address" placeholder="Shop no., building, area, city - PIN code">' + esc(state.shop.address) + '</textarea></div>';
     html += '<div class="field"><label>Address (local script, optional)</label><textarea id="in-shop-address-local" placeholder="पत्ता">' + esc(state.shop.addressLocal) + '</textarea></div>';
-    html += '<p class="hint" style="margin-bottom:10px">Shown to customers on the hub selection card, so they can find you for pickup.</p>';
+    html += '<div class="field"><label>Google Maps link (optional)</label><input type="url" id="in-maps-url" value="' + esc(state.shop.mapsUrl) + '" placeholder="Paste a Google Maps share link here"></div>';
+    html += '<p class="hint" style="margin-bottom:10px">Powers "Call shop" and "Get directions" for customers. Without a Maps link, directions fall back to searching the address above.</p>';
     html += '<hr style="border:none;border-top:1px solid var(--line);margin:16px 0">';
     html += '<div class="field"><label>Staff sign-in PIN</label><input type="text" inputmode="numeric" id="in-staff-pin" value="' + esc(state.shop.staffPin) + '" placeholder="e.g. 1234"></div>';
     html += '<p class="hint" style="margin-bottom:10px">Whoever runs the counter uses this PIN behind the "Owner Login" link at the bottom of the customer app — change it from the default.</p>';
@@ -1522,10 +1629,48 @@
     return '<div class="stat-tile"><div class="num">' + num + '</div><div class="lbl">' + lbl + '</div></div>';
   }
 
-  function itemSalesToday(){
+  function startOfWeekStr(){
+    var now = new Date(nowMs());
+    var dow = now.getDay(); // 0 = Sunday
+    var sinceMonday = (dow === 0) ? 6 : dow - 1;
+    var monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - sinceMonday);
+    return monday.getFullYear() + "-" + String(monday.getMonth()+1).padStart(2,"0") + "-" + String(monday.getDate()).padStart(2,"0");
+  }
+  function ordersInPeriod(period){
+    var today = todayStr();
+    var start = period === "week" ? startOfWeekStr() : period === "month" ? (today.slice(0,7) + "-01") : null;
+    return state.orders.filter(function(o){
+      if(o.status === "REJECTED" || o.status === "CANCELLED") return false;
+      if(period === "all") return true;
+      if(period === "today") return o.serviceDate === today;
+      return o.serviceDate >= start && o.serviceDate <= today;
+    });
+  }
+  function shopRatingSummary(){
+    if(!state.reviews.length) return null;
+    var sum = state.reviews.reduce(function(s,r){ return s + (r.rating||0); }, 0);
+    return { avg: sum / state.reviews.length, count: state.reviews.length };
+  }
+  function submitReview(orderId, rating, comment){
+    var o = state.orders.find(function(x){ return x.id === orderId; });
+    if(!o || !(rating >= 1 && rating <= 5)) return;
+    var review = {
+      orderId: orderId, tokenDisplay: o.tokenDisplay, name: o.name,
+      rating: rating, comment: (comment||"").trim(), createdAt: nowMs()
+    };
+    if(cloud.enabled){
+      cloud.db.ref("reviews").push(review).catch(function(){ toast("Couldn't submit your review — try again."); });
+    } else {
+      review.id = uid(); state.reviews.push(review);
+    }
+    patchOrderCloud(orderId, { reviewed: true });
+    state.ui.reviewDraftRating = 0; state.ui.reviewDraftComment = "";
+    persist(); render();
+    toast("Thanks for your feedback!");
+  }
+  function itemSalesForPeriod(period){
     var counts = {};
-    todaysOrders().forEach(function(o){
-      if(o.status === "REJECTED" || o.status === "CANCELLED") return;
+    ordersInPeriod(period).forEach(function(o){
       o.items.forEach(function(l){
         if(!counts[l.name]) counts[l.name] = { name:l.name, qty:0, revenue:0 };
         counts[l.name].qty += l.qty;
@@ -1571,6 +1716,8 @@
     html += renderStageTimeline(o);
 
     html += '<div class="queue-actions">';
+    var custCall = telLink(o.phone);
+    if(custCall) html += '<a class="btn btn-sm btn-ghost" href="' + esc(custCall) + '" title="Call ' + esc(o.name) + '" style="text-decoration:none">📞 Call</a>';
     var custWa = waLink(o.phone, statusUpdateText(o));
     if(custWa && o.status !== "PENDING"){
       html += '<a class="btn btn-sm btn-ghost" href="' + custWa + '" target="_blank" rel="noopener" title="Message ' + esc(o.name) + ' on WhatsApp" style="text-decoration:none">📲 Notify</a>';
@@ -1673,6 +1820,33 @@
     if(t.id === "btn-place" || attr(t,"btn-place")){ placeOrder(); return; }
     if(t.id === "btn-new-order"){ state.ui.activeOrderId = null; state.ui.cart={}; persist(); render(); return; }
 
+    var viewOrderId;
+    if((viewOrderId = attr(t,"data-view-order"))){
+      state.ui.activeOrderId = viewOrderId;
+      state.ui.editingOrderId = null;
+      persist(); render(); return;
+    }
+    if(t.id === "btn-cancel-edit"){
+      state.ui.editingOrderId = null; state.ui.cart = {};
+      persist(); render(); toast("Editing cancelled"); return;
+    }
+    var editOrderId;
+    if((editOrderId = attr(t,"data-edit-order"))){ startEditOrder(editOrderId); return; }
+    var startCancelId2;
+    if((startCancelId2 = attr(t,"data-start-cancel"))){ state.ui.cancelling = startCancelId2; render(); return; }
+    if(t.id === "btn-dismiss-cancel"){ state.ui.cancelling = null; render(); return; }
+    var confirmCancelId2;
+    if((confirmCancelId2 = attr(t,"data-confirm-cancel"))){ cancelOrderByCustomer(confirmCancelId2); return; }
+
+    var starVal = attr(t,"data-star");
+    if(starVal !== null){ state.ui.reviewDraftRating = +starVal; persist(); render(); return; }
+    var reviewOrderId;
+    if((reviewOrderId = attr(t,"data-submit-review"))){
+      if(!(state.ui.reviewDraftRating >= 1)){ toast("Tap a star to rate your experience first."); return; }
+      submitReview(reviewOrderId, state.ui.reviewDraftRating, state.ui.reviewDraftComment);
+      return;
+    }
+
     if((id = attr(t,"data-accept"))){ setOrderStatus(id,"ACCEPTED"); return; }
     if((id = attr(t,"data-prepare"))){ setOrderStatus(id,"PREPARING"); return; }
     if((id = attr(t,"data-ready"))){ setOrderStatus(id,"READY"); return; }
@@ -1716,6 +1890,8 @@
       if(pos === -1) wh.push(wd); else wh.splice(pos,1);
       updateShop({ weeklyHolidays: wh }); return;
     }
+    var bestPeriod = attr(t,"data-best-period");
+    if(bestPeriod !== null){ state.ui.bestSellerPeriod = bestPeriod; persist(); render(); return; }
     if(t.id === "btn-export-csv"){ exportOrdersCsv(); return; }
     if(t.id === "btn-voice-test"){ speak("This is a test announcement for " + state.shop.name + "."); return; }
 
@@ -1764,6 +1940,7 @@
     if(t.id === "in-owner-whatsapp"){ if(cloud.enabled) cloud.db.ref("shop").update({ ownerWhatsapp: t.value }); return; }
     if(t.id === "in-shop-address"){ if(cloud.enabled) cloud.db.ref("shop").update({ address: t.value }); return; }
     if(t.id === "in-shop-address-local"){ if(cloud.enabled) cloud.db.ref("shop").update({ addressLocal: t.value }); return; }
+    if(t.id === "in-maps-url"){ if(cloud.enabled) cloud.db.ref("shop").update({ mapsUrl: t.value.trim() }); return; }
     if(t.id === "in-staff-pin"){ if(cloud.enabled) cloud.db.ref("shop").update({ staffPin: t.value }); return; }
     if(t.id === "in-upi-id"){ if(cloud.enabled) cloud.db.ref("shop").update({ upiId: t.value.trim() }); return; }
     if(t.id === "in-upi-payee"){ if(cloud.enabled) cloud.db.ref("shop").update({ upiPayeeName: t.value.trim() }); return; }
@@ -1794,9 +1971,11 @@
     else if(t.id === "in-phone"){ state.ui.phone = t.value; persist(); }
     else if(t.id === "in-address"){ state.ui.address = t.value; persist(); }
     else if(t.id === "in-notes"){ state.ui.notes = t.value; persist(); }
+    else if(t.id === "in-review-comment"){ state.ui.reviewDraftComment = t.value; persist(); }
     else if(t.id === "in-owner-whatsapp"){ state.shop.ownerWhatsapp = t.value; persist(); }
     else if(t.id === "in-shop-address"){ state.shop.address = t.value; persist(); }
     else if(t.id === "in-shop-address-local"){ state.shop.addressLocal = t.value; persist(); }
+    else if(t.id === "in-maps-url"){ state.shop.mapsUrl = t.value; persist(); }
     else if(t.id === "in-staff-pin"){ state.shop.staffPin = t.value; persist(); }
     else if(t.id === "in-upi-id"){ state.shop.upiId = t.value; persist(); }
     else if(t.id === "in-upi-payee"){ state.shop.upiPayeeName = t.value; persist(); }
@@ -1821,6 +2000,30 @@
     var address = (state.ui.address||"").trim();
     if(state.ui.fulfilment === "DELIVERY" && !address){ showErr("Please enter a delivery address."); return; }
     state.ui.customerLoggedIn = true;
+
+    if(state.ui.editingOrderId){
+      var editId = state.ui.editingOrderId;
+      var existing = state.orders.find(function(o){ return o.id === editId; });
+      if(!existing || existing.status !== "PENDING"){
+        toast("This order can no longer be edited — the shop may have already acted on it.");
+        state.ui.editingOrderId = null; render(); return;
+      }
+      patchOrderCloud(editId, {
+        items: lines.map(function(l){ return { name:l.item.name, price:l.item.price, qty:l.qty }; }),
+        total: cartTotal(lines),
+        fulfilment: state.ui.fulfilment,
+        address: state.ui.fulfilment==="DELIVERY" ? address : "",
+        notes: (state.ui.notes||"").trim(),
+        name: name, phone: phone,
+        updatedAt: nowMs()
+      });
+      state.ui.editingOrderId = null;
+      state.ui.cart = {};
+      state.ui.activeOrderId = editId;
+      persist(); render();
+      toast("Order " + existing.tokenDisplay + " updated");
+      return;
+    }
 
     function finish(seq){
       if(seq == null){ showErr("Could not reach the shop right now — please try again."); return; }
@@ -1855,6 +2058,38 @@
 
     if(cloud.enabled) allocateTokenCloud(finish);
     else finish(allocateToken());
+  }
+
+  // Loads an existing PENDING order's items back into the cart for editing. Items are
+  // matched back to the live menu by name (orders only ever store a name/price/qty
+  // snapshot, not a menu item id) — anything since removed from the menu is dropped
+  // with a note rather than silently kept as a ghost line.
+  function startEditOrder(id){
+    var o = state.orders.find(function(x){ return x.id === id; });
+    if(!o || o.status !== "PENDING") return;
+    var cart = {}, missing = [];
+    o.items.forEach(function(item){
+      var m = state.menu.find(function(mm){ return mm.name === item.name; });
+      if(m) cart[m.id] = (cart[m.id]||0) + item.qty;
+      else missing.push(item.name);
+    });
+    state.ui.cart = cart;
+    state.ui.fulfilment = o.fulfilment;
+    state.ui.address = o.address || "";
+    state.ui.notes = o.notes || "";
+    state.ui.editingOrderId = id;
+    state.ui.cancelling = null;
+    persist(); render();
+    if(missing.length) toast(missing.join(", ") + " no longer on the menu — left out of the edit");
+  }
+  function cancelOrderByCustomer(id){
+    var o = state.orders.find(function(x){ return x.id === id; });
+    if(!o) return;
+    var now = nowMs();
+    patchOrderCloud(id, { status: "CANCELLED", updatedAt: now, ["stageTimes/CANCELLED"]: now });
+    state.ui.cancelling = null;
+    render();
+    toast(o.tokenDisplay + " cancelled");
   }
 
   function setOrderStatus(id, status){
@@ -1915,6 +2150,7 @@
     state.menu = (incoming.menu && incoming.menu.length) ? incoming.menu : state.menu;
     state.counter = incoming.counter || state.counter;
     state.orders = incoming.orders || state.orders;
+    state.reviews = incoming.reviews || state.reviews;
   }
   window.addEventListener("storage", function(e){
     // Once Firebase is connected it's the single source of truth for shared data —
@@ -1964,6 +2200,11 @@
     cloud.db.ref("orders").on("value", function(snap){
       var val = snap.val();
       state.orders = val ? Object.keys(val).map(function(k){ var o = val[k]; o.id = k; return o; }) : [];
+      render();
+    });
+    cloud.db.ref("reviews").on("value", function(snap){
+      var val = snap.val();
+      state.reviews = val ? Object.keys(val).map(function(k){ var r = val[k]; r.id = k; return r; }) : [];
       render();
     });
   }
