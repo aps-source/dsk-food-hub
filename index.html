@@ -819,9 +819,12 @@
     var vpa = (state.shop.upiId||"").trim();
     if(!vpa) return "";
     var payee = (state.shop.upiPayeeName||state.shop.name||"").trim();
+    // NPCI's own spec examples always show two decimal places (e.g. "70.00") — some UPI
+    // apps are strict about this even though a bare integer is technically valid too.
+    var amount = Number(order.total || 0).toFixed(2);
     return "pa=" + encodeURIComponent(vpa) +
       "&pn=" + encodeURIComponent(payee) +
-      "&am=" + encodeURIComponent(order.total) +
+      "&am=" + amount +
       "&cu=INR&tn=" + encodeURIComponent("Order " + order.tokenDisplay);
   }
   // Android/iOS can silently default the generic upi:// scheme to whichever app last
