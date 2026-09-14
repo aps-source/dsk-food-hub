@@ -1729,15 +1729,23 @@
       orderId: orderId, tokenDisplay: o.tokenDisplay, name: o.name,
       rating: rating, comment: (comment||"").trim(), createdAt: nowMs()
     };
+    // Only clear the draft / mark reviewed / say "thanks" once the write is actually
+    // confirmed — previously this fired unconditionally, so a rejected write (e.g. a
+    // database-rules gap) still told the customer it worked while the owner never saw it.
+    function onSaved(){
+      patchOrderCloud(orderId, { reviewed: true });
+      state.ui.reviewDraftRating = 0; state.ui.reviewDraftComment = "";
+      persist(); render();
+      toast("Thanks for your feedback!");
+    }
     if(cloud.enabled){
-      cloud.db.ref("reviews").push(review).catch(function(){ toast("Couldn't submit your review — try again."); });
+      cloud.db.ref("reviews").push(review).then(onSaved).catch(function(){
+        toast("Couldn't submit your review — check your connection and try again.");
+      });
     } else {
       review.id = uid(); state.reviews.push(review);
+      onSaved();
     }
-    patchOrderCloud(orderId, { reviewed: true });
-    state.ui.reviewDraftRating = 0; state.ui.reviewDraftComment = "";
-    persist(); render();
-    toast("Thanks for your feedback!");
   }
   function itemSalesForPeriod(period){
     var counts = {};
