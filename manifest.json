@@ -1,0 +1,14 @@
+{
+  "name": "DSK Food Hub",
+  "short_name": "DSK Food Hub",
+  "description": "Order, token, pay at hub — for the DSK Vishwa community food hub.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FBF6EC",
+  "theme_color": "#C98A12",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

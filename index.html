@@ -4,11 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DSK Food Hub</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#C98A12">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Vesper+Libre:wght@500;700&family=Karla:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
 <style>
   /* ============ Design tokens ============ */
@@ -521,6 +526,11 @@
     appId: "1:354315309281:web:e81d217a548291e92367a0"
   };
   var cloud = { enabled: false, db: null };
+  // Real push notifications (reach the phone even with the tab closed/screen locked) need
+  // a VAPID key tied to this Firebase project — generate one under Project settings ->
+  // Cloud Messaging -> Web configuration, and paste it in here.
+  var VAPID_PUBLIC_KEY = "PASTE_VAPID_KEY_HERE";
+  var push = { supported: false, messaging: null, swReg: null };
   // Difference between Firebase's clock and this device's own clock. A phone with the
   // wrong date/time set would otherwise allocate tokens for the wrong day, or throw off
   // "today's orders" filtering — every timestamp this app writes goes through nowMs()
@@ -590,7 +600,7 @@
           activeOrderId:null, rejecting:null, resetArm:false,
           ownerTab:"orders", newItemName:"", newItemLocal:"", newItemPrice:"", newItemOccasion:"",
           customerLoggedIn:false, showCustLogin:false, custLoginName:"", custLoginPhone:"", custLoginError:"",
-          lastSeenOrderTs: null, lastSeenCustomerActionTs: null, bestSellerPeriod: "today", reviewDraftRating: 0, reviewDraftComment: "",
+          lastSeenOrderTs: null, lastSeenCustomerActionTs: null, bestSellerPeriod: "today", reviewDraftRating: 0, reviewDraftComment: "", pushEnabledHere: false,
           editingOrderId: null, cancelling: null }
   };
 
@@ -1440,11 +1450,18 @@
     var html = '<div class="orders-page-head" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">';
     html += '<div><h2 class="display" style="font-size:20px;margin-bottom:2px">Today\'s orders</h2>';
     html += '<p class="sub">' + fmtDate(todayStr()) + ' · ' + openOrders.length + ' open · ' + closedOrders.length + ' closed</p></div>';
+    html += '<div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end">';
     html += '<div class="voice-toggle-box">' +
       '<label class="switch"><input type="checkbox" id="tg-voice" ' + (state.shop.voiceAnnounce?'checked':'') + '><span class="track"></span></label>' +
       '<span>' + (state.shop.voiceAnnounce ? '🔊 Voice alerts active' : '🔇 Voice alerts inactive') + '</span>' +
       '<button class="btn btn-ghost btn-sm" id="btn-voice-test" type="button">Test</button>' +
     '</div>';
+    if(state.ui.pushEnabledHere){
+      html += '<div class="voice-toggle-box">🔔 Push notifications on for this device</div>';
+    } else if(push.supported){
+      html += '<button class="btn btn-owner btn-sm" id="btn-enable-push" type="button">🔔 Enable push notifications</button>';
+    }
+    html += '</div>';
     html += '</div>';
 
     if(openOrders.length === 0 && closedOrders.length === 0){
@@ -1988,6 +2005,7 @@
     if(t.id === "btn-export-csv"){ exportOrdersCsv(); return; }
     if(t.id === "btn-remove-qr-logo"){ updateShop({ qrLogoDataUrl: "" }); toast("QR logo removed"); return; }
     if(t.id === "btn-voice-test"){ speak("This is a test announcement for " + state.shop.name + "."); return; }
+    if(t.id === "btn-enable-push"){ enableNotifications(); return; }
 
     if(t.id === "btn-lock-now"){
       state.ui.ownerUnlocked = false; state.ui.role = "customer"; state.ui.customerStep = "welcome";
@@ -2342,8 +2360,36 @@
       });
       seedCloudIfEmpty();
       attachCloudListeners();
+      initPush();
     }catch(e){ cloud.enabled = false; cloud.db = null; }
   })();
+
+  // Registers the service worker that lets push notifications arrive even with the tab
+  // closed. Getting/saving an actual device token only happens later, when the owner
+  // explicitly taps "Enable notifications" — registering the worker alone asks for nothing.
+  function initPush(){
+    if(!("serviceWorker" in navigator) || !("PushManager" in window) || !firebase.messaging) return;
+    if(!navigator.serviceWorker.register) return;
+    navigator.serviceWorker.register("firebase-messaging-sw.js").then(function(reg){
+      push.swReg = reg;
+      push.messaging = firebase.messaging();
+      push.supported = true;
+    }).catch(function(){});
+  }
+  function enableNotifications(){
+    if(!push.supported || !push.messaging){ toast("Notifications aren't supported in this browser."); return; }
+    if(VAPID_PUBLIC_KEY === "PASTE_VAPID_KEY_HERE"){ toast("Ask the developer to finish setting up notifications first."); return; }
+    Notification.requestPermission().then(function(permission){
+      if(permission !== "granted"){ toast("Notification permission wasn't granted."); return; }
+      push.messaging.getToken({ vapidKey: VAPID_PUBLIC_KEY, serviceWorkerRegistration: push.swReg }).then(function(token){
+        if(!token){ toast("Couldn't get a notification token — try again."); return; }
+        if(cloud.enabled) cloud.db.ref("fcmTokens/" + token).set({ addedAt: nowMs() });
+        state.ui.pushEnabledHere = true;
+        persist(); render();
+        toast("Notifications enabled on this device");
+      }).catch(function(){ toast("Couldn't enable notifications — try again."); });
+    }).catch(function(){ toast("Couldn't enable notifications — try again."); });
+  }
 
   function submitPin(){
     var entered = (state.ui.pinInput||"").trim();
