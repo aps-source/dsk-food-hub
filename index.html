@@ -728,8 +728,15 @@
       callback((val.next||2) - 1);
     });
   }
+  // Month/weekday initials aren't all unique (e.g. Jan/Jun/Jul share "J", Tue/Thu share "T")
+  // — that's an accepted trade-off for a short, at-a-glance code; the day number next to the
+  // month letter and the real date shown elsewhere on the ticket resolve any ambiguity.
+  var MONTH_INITIALS = ["J","F","M","A","M","J","J","A","S","O","N","D"];
+  var WEEKDAY_INITIALS = ["S","M","T","W","T","F","S"];
   function tokenDisplay(seq){
-    return state.shop.tokenPrefix + "-" + String(seq).padStart(3,"0");
+    var now = new Date(nowMs());
+    var dateCode = MONTH_INITIALS[now.getMonth()] + now.getDate() + WEEKDAY_INITIALS[now.getDay()];
+    return state.shop.tokenPrefix + "-" + dateCode + "-" + String(seq).padStart(3,"0");
   }
 
   // Optimistic local update (instant UI) + write-through to Firebase when connected.
